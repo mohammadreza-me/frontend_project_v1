@@ -1,0 +1,527 @@
+   400→   400→   400→          <CardContent className="space-y-4">
+   401→   401→   401→            <Skeleton className="h-6 w-full" />
+   402→   402→   402→            <Skeleton className="h-6 w-3/4" />
+   403→   403→   403→            <div className="space-y-3 pt-2">
+   404→   404→   404→              {[1, 2, 3, 4].map((i) => (
+   405→   405→   405→                <div
+   406→   406→   406→                  key={i}
+   407→   407→   407→                  className="rounded-lg border p-4"
+   408→   408→   408→                >
+   409→   409→   409→                  <Skeleton className="h-5 w-full" />
+   410→   410→   410→                </div>
+   411→   411→   411→              ))}
+   412→   412→   412→            </div>
+   413→   413→   413→          </CardContent>
+   414→   414→   414→          <CardFooter className="justify-between">
+   415→   415→   415→            <Skeleton className="h-9 w-24" />
+   416→   416→   416→            <Skeleton className="h-9 w-24" />
+   417→   417→   417→          </CardFooter>
+   418→   418→   418→        </Card>
+   419→   419→   419→
+   420→   420→   420→        {/* Overlay loading indicator */}
+   421→   421→   421→        <div className="mt-6 flex flex-col items-center gap-4">
+   422→   422→   422→          <div className="flex items-center gap-3">
+   423→   423→   423→            <Loader2 className="size-5 animate-spin text-emerald-500" />
+   424→   424→   424→            <p className="text-sm font-medium text-muted-foreground transition-all duration-300">
+   425→   425→   425→              {loadingMessages[loadingMessageIndex]}
+   426→   426→   426→            </p>
+   427→   427→   427→          </div>
+   428→   428→   428→          <Progress value={((loadingMessageIndex + 1) / loadingMessages.length) * 100} className="w-64" />
+   429→   429→   429→          {showRetry && (
+   430→   430→   430→            <Button variant="outline" onClick={handleStart} className="mt-2">
+   431→   431→   431→              <RotateCcw className="me-2 size-4" />
+   432→   432→   432→              {t.common.retry}
+   433→   433→   433→            </Button>
+   434→   434→   434→          )}
+   435→   435→   435→        </div>
+   436→   436→   436→      </main>
+   437→   437→   437→    );
+   438→   438→   438→  }
+   439→   439→   439→
+   440→   440→   440→  // ─── Render: Answering Questions (Phase 3) ───────────────
+   441→   441→   441→  if (phase === 'answering' && session) {
+   442→   442→   442→    const question = session.questions[currentQuestionIndex];
+   443→   443→   443→    if (!question) return null;
+   444→   444→   444→
+   445→   445→   445→    const isQuestionSubmitted = submittedForQuestion.has(question.id);
+   446→   446→   446→    const currentExamAnswer = isExam
+   447→   447→   447→      ? submittedAnswers.find((a) => a.question_id === question.id)
+   448→   448→   448→      : null;
+   449→   449→   449→
+   450→   450→   450→    return (
+   451→   451→   451→      <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+   452→   452→   452→        {/* Exam timer */}
+   453→   453→   453→        {isExam && session.time_limit_seconds && (
+   454→   454→   454→          <div className="mb-4 flex items-center justify-between rounded-lg border border-muted bg-muted/50 p-3">
+   455→   455→   455→            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+   456→   456→   456→              <Clock className="size-4" />
+   457→   457→   457→              <span>{t.exam.timeRemaining}</span>
+   458→   458→   458→            </div>
+   459→   459→   459→            <span
+   460→   460→   460→              className={`font-mono text-lg font-bold tabular-nums ${
+   461→   461→   461→                timeRemaining < 60
+   462→   462→   462→                  ? 'animate-pulse text-red-500'
+   463→   463→   463→                  : timeRemaining < 180
+   464→   464→   464→                    ? 'text-amber-500'
+   465→   465→   465→                    : 'text-foreground'
+   466→   466→   466→              }`}
+   467→   467→   467→            >
+   468→   468→   468→              {formatTime(timeRemaining)}
+   469→   469→   469→            </span>
+   470→   470→   470→          </div>
+   471→   471→   471→        )}
+   472→   472→   472→
+   473→   473→   473→        {/* Exam question navigation strip */}
+   474→   474→   474→        {isExam && (
+   475→   475→   475→          <div className="mb-4 flex flex-wrap gap-2">
+   476→   476→   476→            {session.questions.map((q, idx) => {
+   477→   477→   477→              const isAnswered = submittedAnswers.some((a) => a.question_id === q.id);
+   478→   478→   478→              const isCurrent = idx === currentQuestionIndex;
+   479→   479→   479→              return (
+   480→   480→   480→                <button
+   481→   481→   481→                  key={q.id}
+   482→   482→   482→                  onClick={() => {
+   483→   483→   483→                    setCurrentQuestionIndex(idx);
+   484→   484→   484→                    const ans = submittedAnswers.find((a) => a.question_id === q.id);
+   485→   485→   485→                    setSelectedAnswer(ans?.selected_option_id ?? null);
+   486→   486→   486→                  }}
+   487→   487→   487→                  className={`flex size-9 items-center justify-center rounded-md text-sm font-medium transition-all ${
+   488→   488→   488→                    isCurrent
+   489→   489→   489→                      ? 'bg-emerald-600 text-white shadow-sm'
+   490→   490→   490→                      : isAnswered
+   491→   491→   491→                        ? 'bg-muted text-muted-foreground'
+   492→   492→   492→                        : 'border border-border bg-background text-foreground hover:bg-accent'
+   493→   493→   493→                  }`}
+   494→   494→   494→                >
+   495→   495→   495→                  {idx + 1}
+   496→   496→   496→                </button>
+   497→   497→   497→              );
+   498→   498→   498→            })}
+   499→   499→   499→          </div>
+   500→   500→   500→        )}
+   501→   501→   501→
+   502→   502→   502→        {/* Question Card */}
+   503→   503→   503→        <Card className={isExam ? 'border-2 border-muted' : ''}>
+   504→   504→   504→          <CardHeader>
+   505→   505→   505→            <div className="flex items-center justify-between">
+   506→   506→   506→              <Badge variant={isExam ? 'outline' : 'secondary'}>
+   507→   507→   507→                {t.practice.questionOf
+   508→   508→   508→                  .replace('{current}', String(currentQuestionIndex + 1))
+   509→   509→   509→                  .replace('{total}', String(session.questions.length))}
+   510→   510→   510→              </Badge>
+   511→   511→   511→              <Badge
+   512→   512→   512→                variant="outline"
+   513→   513→   513→                className={
+   514→   514→   514→                  question.difficulty === 'easy'
+   515→   515→   515→                    ? 'border-emerald-300 text-emerald-600 dark:border-emerald-700 dark:text-emerald-400'
+   516→   516→   516→                    : question.difficulty === 'hard'
+   517→   517→   517→                      ? 'border-red-300 text-red-600 dark:border-red-700 dark:text-red-400'
+   518→   518→   518→                      : 'border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400'
+   519→   519→   519→                }
+   520→   520→   520→              >
+   521→   521→   521→                {question.difficulty}
+   522→   522→   522→              </Badge>
+   523→   523→   523→            </div>
+   524→   524→   524→            <CardTitle className="mt-4 text-lg leading-relaxed">
+   525→   525→   525→              {question.text}
+   526→   526→   526→            </CardTitle>
+   527→   527→   527→          </CardHeader>
+   528→   528→   528→
+   529→   529→   529→          <CardContent>
+   530→   530→   530→            {/* Practice: Progress bar */}
+   531→   531→   531→            {!isExam && (
+   532→   532→   532→              <Progress
+   533→   533→   533→                value={
+   534→   534→   534→                  ((currentQuestionIndex + (isQuestionSubmitted ? 1 : 0)) /
+   535→   535→   535→                    session.questions.length) *
+   536→   536→   536→                  100
+   537→   537→   537→                }
+   538→   538→   538→                className="mb-6"
+   539→   539→   539→              />
+   540→   540→   540→            )}
+   541→   541→   541→
+   542→   542→   542→            {/* Answer options */}
+   543→   543→   543→            <div className="space-y-3">
+   544→   544→   544→              {question.options.map((option) => {
+   545→   545→   545→                const isSelected = (isExam
+   546→   546→   546→                  ? currentExamAnswer?.selected_option_id
+   547→   547→   547→                  : selectedAnswer) === option.id;
+   548→   548→   548→                const isCorrect = option.id === question.correct_option_id;
+   549→   549→   549→                const showResult = !isExam && isQuestionSubmitted;
+   550→   550→   550→
+   551→   551→   551→                let optionClass =
+   552→   552→   552→                  'cursor-pointer rounded-lg border-2 p-4 text-start transition-all hover:bg-accent';
+   553→   553→   553→
+   554→   554→   554→                if (showResult) {
+   555→   555→   555→                  if (isSelected && isCorrect) {
+   556→   556→   556→                    optionClass =
+   557→   557→   557→                      'rounded-lg border-2 border-emerald-500 bg-emerald-50 p-4 text-start dark:bg-emerald-950/30';
+   558→   558→   558→                  } else if (isSelected && !isCorrect) {
+   559→   559→   559→                    optionClass =
+   560→   560→   560→                      'rounded-lg border-2 border-red-500 bg-red-50 p-4 text-start dark:bg-red-950/30';
+   561→   561→   561→                  } else if (!isSelected && isCorrect) {
+   562→   562→   562→                    optionClass =
+   563→   563→   563→                      'rounded-lg border-2 border-emerald-500 bg-emerald-50/50 p-4 text-start dark:bg-emerald-950/20';
+   564→   564→   564→                  } else {
+   565→   565→   565→                    optionClass =
+   566→   566→   566→                      'rounded-lg border-2 border-border p-4 text-start opacity-60';
+   567→   567→   567→                  }
+   568→   568→   568→                } else if (isExam && isSelected) {
+   569→   569→   569→                  optionClass =
+   570→   570→   570→                    'rounded-lg border-2 border-amber-500 bg-amber-50 p-4 text-start dark:bg-amber-950/30';
+   571→   571→   571→                } else if (!isExam && !isQuestionSubmitted) {
+   572→   572→   572→                  optionClass =
+   573→   573→   573→                    'cursor-pointer rounded-lg border-2 border-border p-4 text-start transition-all hover:border-emerald-300 hover:bg-emerald-50/50 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/20';
+   574→   574→   574→                } else {
+   575→   575→   575→                  optionClass =
+   576→   576→   576→                    'rounded-lg border-2 border-border p-4 text-start';
+   577→   577→   577→                }
+   578→   578→   578→
+   579→   579→   579→                return (
+   580→   580→   580→                  <div key={option.id}>
+   581→   581→   581→                    <button
+   582→   582→   582→                      className={optionClass}
+   583→   583→   583→                      onClick={() => handleSelectAnswer(option.id)}
+   584→   584→   584→                      disabled={isQuestionSubmitted || submitMutation.isPending}
+   585→   585→   585→                    >
+   586→   586→   586→                      <div className="flex items-start gap-3">
+   587→   587→   587→                        <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium">
+   588→   588→   588→                          {String.fromCharCode(65 + question.options.indexOf(option))}
+   589→   589→   589→                        </span>
+   590→   590→   590→                        <span className="flex-1 text-sm">{option.text}</span>
+   591→   591→   591→                        {showResult && isSelected && isCorrect && (
+   592→   592→   592→                          <CheckCircle2 className="ms-auto mt-0.5 size-5 shrink-0 text-emerald-500" />
+   593→   593→   593→                        )}
+   594→   594→   594→                        {showResult && isSelected && !isCorrect && (
+   595→   595→   595→                          <XCircle className="ms-auto mt-0.5 size-5 shrink-0 text-red-500" />
+   596→   596→   596→                        )}
+   597→   597→   597→                        {showResult && !isSelected && isCorrect && (
+   598→   598→   598→                          <CheckCircle2 className="ms-auto mt-0.5 size-5 shrink-0 text-emerald-500" />
+   599→   599→   599→                        )}
+   600→   600→   600→                      </div>
+   601→   601→   601→                    </button>
+   602→   602→   602→                    {/* Practice: Accordion with option explanation after submission */}
+   603→   603→   603→                    {showResult && (
+   604→   604→   604→                      <Accordion type="single" collapsible className="mt-1">
+   605→   605→   605→                        <AccordionItem value={option.id} className="border-b-0">
+   606→   606→   606→                          <AccordionTrigger className="ps-4 py-2 text-xs text-muted-foreground hover:no-underline">
+   607→   607→   607→                            {t.practice.explanation}
+   608→   608→   608→                          </AccordionTrigger>
+   609→   609→   609→                          <AccordionContent className="ps-10 text-xs text-muted-foreground">
+   610→   610→   610→                            {option.explanation}
+   611→   611→   611→                          </AccordionContent>
+   612→   612→   612→                        </AccordionItem>
+   613→   613→   613→                      </Accordion>
+   614→   614→   614→                    )}
+   615→   615→   615→                  </div>
+   616→   616→   616→                );
+   617→   617→   617→              })}
+   618→   618→   618→            </div>
+   619→   619→   619→
+   620→   620→   620→            {/* Practice: Feedback after answer */}
+   621→   621→   621→            {!isExam && isQuestionSubmitted && answerFeedback && (
+   622→   622→   622→              <div className="mt-6 space-y-3">
+   623→   623→   623→                <Separator />
+   624→   624→   624→                <div
+   625→   625→   625→                  className={`rounded-lg p-4 ${
+   626→   626→   626→                    answerFeedback.correct
+   627→   627→   627→                      ? 'bg-emerald-50 dark:bg-emerald-950/30'
+   628→   628→   628→                      : 'bg-red-50 dark:bg-red-950/30'
+   629→   629→   629→                  }`}
+   630→   630→   630→                >
+   631→   631→   631→                  <div className="flex items-center gap-2">
+   632→   632→   632→                    {answerFeedback.correct ? (
+   633→   633→   633→                      <>
+   634→   634→   634→                        <CheckCircle2 className="size-5 text-emerald-500" />
+   635→   635→   635→                        <span className="font-medium text-emerald-700 dark:text-emerald-400">
+   636→   636→   636→                          {t.practice.correct}
+   637→   637→   637→                        </span>
+   638→   638→   638→                      </>
+   639→   639→   639→                    ) : (
+   640→   640→   640→                      <>
+   641→   641→   641→                        <XCircle className="size-5 text-red-500" />
+   642→   642→   642→                        <span className="font-medium text-red-700 dark:text-red-400">
+   643→   643→   643→                          {t.practice.incorrect}
+   644→   644→   644→                        </span>
+   645→   645→   645→                      </>
+   646→   646→   646→                    )}
+   647→   647→   647→                  </div>
+   648→   648→   648→                  <p className="mt-2 text-sm text-muted-foreground">
+   649→   649→   649→                    {answerFeedback.explanation}
+   650→   650→   650→                  </p>
+   651→   651→   651→                  <div className="mt-3 flex items-center gap-2">
+   652→   652→   652→                    <span className="text-xs text-muted-foreground">
+   653→   653→   653→                      {t.practice.relatedConcept}:
+   654→   654→   654→                    </span>
+   655→   655→   655→                    <button
+   656→   656→   656→                      onClick={() => handleViewSkillGraph(answerFeedback.concept_id)}
+   657→   657→   657→                      className="text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+   658→   658→   658→                    >
+   659→   659→   659→                      {answerFeedback.concept_name}
+   660→   660→   660→                    </button>
+   661→   661→   661→                  </div>
+   662→   662→   662→                </div>
+   663→   663→   663→              </div>
+   664→   664→   664→            )}
+   665→   665→   665→          </CardContent>
+   666→   666→   666→
+   667→   667→   667→          <CardFooter className="justify-between">
+   668→   668→   668→            <Button
+   669→   669→   669→              variant="outline"
+   670→   670→   670→              onClick={handlePrev}
+   671→   671→   671→              disabled={currentQuestionIndex === 0}
+   672→   672→   672→            >
+   673→   673→   673→              {rtl ? (
+   674→   674→   674→                <ArrowRight className="me-2 size-4" />
+   675→   675→   675→              ) : (
+   676→   676→   676→                <ArrowLeft className="me-2 size-4" />
+   677→   677→   677→              )}
+   678→   678→   678→              {t.common.back}
+   679→   679→   679→            </Button>
+   680→   680→   680→
+   681→   681→   681→            {isExam ? (
+   682→   682→   682→              <div className="flex gap-2">
+   683→   683→   683→                {currentQuestionIndex < session.questions.length - 1 ? (
+   684→   684→   684→                  <Button onClick={handleNext}>
+   685→   685→   685→                    {t.common.next}
+   686→   686→   686→                    {rtl ? (
+   687→   687→   687→                      <ArrowLeft className="ms-2 size-4" />
+   688→   688→   688→                    ) : (
+   689→   689→   689→                      <ArrowRight className="ms-2 size-4" />
+   690→   690→   690→                    )}
+   691→   691→   691→                  </Button>
+   692→   692→   692→                ) : (
+   693→   693→   693→                  <Button
+   694→   694→   694→                    onClick={handleExamSubmit}
+   695→   695→   695→                    disabled={completeExamMutation.isPending}
+   696→   696→   696→                    className="bg-amber-600 hover:bg-amber-700"
+   697→   697→   697→                  >
+   698→   698→   698→                    {completeExamMutation.isPending && (
+   699→   699→   699→                      <Loader2 className="me-2 size-4 animate-spin" />
+   700→   700→   700→                    )}
+   701→   701→   701→                    {t.common.submit}
+   702→   702→   702→                  </Button>
+   703→   703→   703→                )}
+   704→   704→   704→              </div>
+   705→   705→   705→            ) : (
+   706→   706→   706→              <Button
+   707→   707→   707→                onClick={handleNext}
+   708→   708→   708→                disabled={
+   709→   709→   709→                  !isQuestionSubmitted ||
+   710→   710→   710→                  currentQuestionIndex === session.questions.length - 1
+   711→   711→   711→                    ? !isQuestionSubmitted
+   712→   712→   712→                    : false
+   713→   713→   713→                }
+   714→   714→   714→              >
+   715→   715→   715→                {currentQuestionIndex === session.questions.length - 1
+   716→   716→   716→                  ? t.practice.sessionComplete
+   717→   717→   717→                  : t.common.next}
+   718→   718→   718→                {currentQuestionIndex < session.questions.length - 1 &&
+   719→   719→   719→                  (rtl ? (
+   720→   720→   720→                    <ArrowLeft className="ms-2 size-4" />
+   721→   721→   721→                  ) : (
+   722→   722→   722→                    <ArrowRight className="ms-2 size-4" />
+   723→   723→   723→                  ))}
+   724→   724→   724→              </Button>
+   725→   725→   725→            )}
+   726→   726→   726→          </CardFooter>
+   727→   727→   727→        </Card>
+   728→   728→   728→      </main>
+   729→   729→   729→    );
+   730→   730→   730→  }
+   731→   731→   731→
+   732→   732→   732→  // ─── Render: Results (Phase 4) ───────────────────────────
+   733→   733→   733→  if (phase === 'results') {
+   734→   734→   734→    const correctCount = isExam
+   735→   735→   735→      ? examResult?.correct_count ?? 0
+   736→   736→   736→      : submittedAnswers.filter((a) => a.correct).length;
+   737→   737→   737→    const totalQuestions = isExam
+   738→   738→   738→      ? examResult?.total_questions ?? 0
+   739→   739→   739→      : session?.questions.length ?? 0;
+   740→   740→   740→    const scorePercent = totalQuestions > 0
+   741→   741→   741→      ? Math.round((correctCount / totalQuestions) * 100)
+   742→   742→   742→      : 0;
+   743→   743→   743→
+   744→   744→   744→    return (
+   745→   745→   745→      <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+   746→   746→   746→        {autoSubmitted && (
+   747→   747→   747→          <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
+   748→   748→   748→            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+   749→   749→   749→            <p className="text-sm text-amber-800 dark:text-amber-300">
+   750→   750→   750→              {t.exam.autoSubmitWarning}
+   751→   751→   751→            </p>
+   752→   752→   752→          </div>
+   753→   753→   753→        )}
+   754→   754→   754→
+   755→   755→   755→        {/* Score Card */}
+   756→   756→   756→        <Card className={isExam ? 'border-2 border-muted' : ''}>
+   757→   757→   757→          <CardHeader className="items-center text-center">
+   758→   758→   758→            <div
+   759→   759→   759→              className={`flex size-16 items-center justify-center rounded-full ${
+   760→   760→   760→                scorePercent >= 70
+   761→   761→   761→                  ? 'bg-emerald-100 dark:bg-emerald-950/40'
+   762→   762→   762→                  : scorePercent >= 40
+   763→   763→   763→                    ? 'bg-amber-100 dark:bg-amber-950/40'
+   764→   764→   764→                    : 'bg-red-100 dark:bg-red-950/40'
+   765→   765→   765→              }`}
+   766→   766→   766→            >
+   767→   767→   767→              <Trophy
+   768→   768→   768→                className={`size-8 ${
+   769→   769→   769→                  scorePercent >= 70
+   770→   770→   770→                    ? 'text-emerald-600 dark:text-emerald-400'
+   771→   771→   771→                    : scorePercent >= 40
+   772→   772→   772→                      ? 'text-amber-600 dark:text-amber-400'
+   773→   773→   773→                      : 'text-red-600 dark:text-red-400'
+   774→   774→   774→                }`}
+   775→   775→   775→              />
+   776→   776→   776→            </div>
+   777→   777→   777→            <CardTitle className="mt-4 text-xl">
+   778→   778→   778→              {isExam ? t.exam.examComplete : t.practice.sessionComplete}
+   779→   779→   779→            </CardTitle>
+   780→   780→   780→            {isExam && examResult && (
+   781→   781→   781→              <CardDescription className="mt-1">
+   782→   782→   782→                {t.exam.results}
+   783→   783→   783→              </CardDescription>
+   784→   784→   784→            )}
+   785→   785→   785→          </CardHeader>
+   786→   786→   786→          <CardContent>
+   787→   787→   787→            <div className="flex items-center justify-around">
+   788→   788→   788→              <div className="text-center">
+   789→   789→   789→                <p className="text-3xl font-bold">
+   790→   790→   790→                  {correctCount}/{totalQuestions}
+   791→   791→   791→                </p>
+   792→   792→   792→                <p className="mt-1 text-sm text-muted-foreground">
+   793→   793→   793→                  {isExam ? t.exam.score : t.practice.score}
+   794→   794→   794→                </p>
+   795→   795→   795→              </div>
+   796→   796→   796→              <Separator orientation="vertical" className="h-12" />
+   797→   797→   797→              <div className="text-center">
+   798→   798→   798→                <p
+   799→   799→   799→                  className={`text-3xl font-bold ${
+   800→   800→   800→                    scorePercent >= 70
+   801→   801→   801→                      ? 'text-emerald-600 dark:text-emerald-400'
+   802→   802→   802→                      : scorePercent >= 40
+   803→   803→   803→                        ? 'text-amber-600 dark:text-amber-400'
+   804→   804→   804→                        : 'text-red-600 dark:text-red-400'
+   805→   805→   805→                  }`}
+   806→   806→   806→                >
+   807→   807→   807→                  {scorePercent}%
+   808→   808→   808→                </p>
+   809→   809→   809→                <p className="mt-1 text-sm text-muted-foreground">
+   810→   810→   810→                  {t.dashboard.successRate}
+   811→   811→   811→                </p>
+   812→   812→   812→              </div>
+   813→   813→   813→              {isExam && examResult && (
+   814→   814→   814→                <>
+   815→   815→   815→                  <Separator orientation="vertical" className="h-12" />
+   816→   816→   816→                  <div className="text-center">
+   817→   817→   817→                    <p className="text-3xl font-bold">
+   818→   818→   818→                      {formatTime(examResult.time_taken_seconds)}
+   819→   819→   819→                    </p>
+   820→   820→   820→                    <p className="mt-1 text-sm text-muted-foreground">
+   821→   821→   821→                      {t.exam.timeTaken}
+   822→   822→   822→                    </p>
+   823→   823→   823→                  </div>
+   824→   824→   824→                </>
+   825→   825→   825→              )}
+   826→   826→   826→            </div>
+   827→   827→   827→
+   828→   828→   828→            {/* Action buttons */}
+   829→   829→   829→            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+   830→   830→   830→              <Button
+   831→   831→   831→                variant="outline"
+   832→   832→   832→                onClick={() => setReviewMode((prev) => !prev)}
+   833→   833→   833→              >
+   834→   834→   834→                {isExam ? t.exam.reviewAnswers : t.practice.reviewAnswers}
+   835→   835→   835→              </Button>
+   836→   836→   836→              {isExam ? (
+   837→   837→   837→                <Button
+   838→   838→   838→                  variant="outline"
+   839→   839→   839→                  onClick={() => navigate('dashboard')}
+   840→   840→   840→                >
+   841→   841→   841→                  {t.nav.dashboard}
+   842→   842→   842→                </Button>
+   843→   843→   843→              ) : (
+   844→   844→   844→                <Button
+   845→   845→   845→                  onClick={handleNewSession}
+   846→   846→   846→                  className="bg-emerald-600 hover:bg-emerald-700"
+   847→   847→   847→                >
+   848→   848→   848→                  {t.practice.newSession}
+   849→   849→   849→                </Button>
+   850→   850→   850→              )}
+   851→   851→   851→            </div>
+   852→   852→   852→          </CardContent>
+   853→   853→   853→        </Card>
+   854→   854→   854→
+   855→   855→   855→        {/* Review section */}
+   856→   856→   856→        {reviewMode && session && (
+   857→   857→   857→          <div className="mt-6 space-y-4">
+   858→   858→   858→            <h3 className="text-lg font-semibold">
+   859→   859→   859→              {isExam ? t.exam.reviewAnswers : t.practice.reviewAnswers}
+   860→   860→   860→            </h3>
+   861→   861→   861→            {(isExam && examResult
+   862→   862→   862→              ? examResult.answers
+   863→   863→   863→              : session.questions.map((q, idx) => {
+   864→   864→   864→                  const answer = submittedAnswers.find((a) => a.question_id === q.id);
+   865→   865→   865→                  return {
+   866→   866→   866→                    question_id: q.id,
+   867→   867→   867→                    question_text: q.text,
+   868→   868→   868→                    selected_option_id: answer?.selected_option_id ?? '',
+   869→   869→   869→                    correct_option_id: q.correct_option_id,
+   870→   870→   870→                    correct: answer?.correct ?? false,
+   871→   871→   871→                    concept_name: q.concept_name,
+   872→   872→   872→                    explanation: q.explanation,
+   873→   873→   873→                  };
+   874→   874→   874→                })
+   875→   875→   875→            ).map((item, idx) => (
+   876→   876→   876→              <Card key={item.question_id} className="overflow-hidden">
+   877→   877→   877→                <CardContent className="p-4 sm:p-6">
+   878→   878→   878→                  <div className="flex items-start gap-3">
+   879→   879→   879→                    <span
+   880→   880→   880→                      className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${
+   881→   881→   881→                        item.correct
+   882→   882→   882→                          ? 'bg-emerald-500'
+   883→   883→   883→                          : 'bg-red-500'
+   884→   884→   884→                      }`}
+   885→   885→   885→                    >
+   886→   886→   886→                      {idx + 1}
+   887→   887→   887→                    </span>
+   888→   888→   888→                    <div className="flex-1 space-y-2">
+   889→   889→   889→                      <p className="text-sm font-medium">{item.question_text}</p>
+   890→   890→   890→                      {!item.correct && item.selected_option_id && (
+   891→   891→   891→                        <div className="rounded-md border border-red-200 bg-red-50 ps-4 pe-3 py-2 dark:border-red-800 dark:bg-red-950/30">
+   892→   892→   892→                          <p className="text-xs font-medium text-red-600 dark:text-red-400">
+   893→   893→   893→                            {t.practice.correctAnswer}
+   894→   894→   894→                          </p>
+   895→   895→   895→                          <p className="mt-0.5 text-sm text-muted-foreground">
+   896→   896→   896→                            {session.questions
+   897→   897→   897→                              .find((q) => q.id === item.question_id)
+   898→   898→   898→                              ?.options.find((o) => o.id === item.correct_option_id)
+   899→   899→   899→                              ?.text}
+   900→   900→   900→                          </p>
+   901→   901→   901→                        </div>
+   902→   902→   902→                      )}
+   903→   903→   903→                      <p className="text-xs text-muted-foreground">
+   904→   904→   904→                        {item.explanation}
+   905→   905→   905→                      </p>
+   906→   906→   906→                      <button
+   907→   907→   907→                        onClick={() => handleViewSkillGraph(
+   908→   908→   908→                          session.questions.find((q) => q.id === item.question_id)?.concept_id ?? ''
+   909→   909→   909→                        )}
+   910→   910→   910→                        className="text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+   911→   911→   911→                      >
+   912→   912→   912→                        {t.practice.relatedConcept}: {item.concept_name}
+   913→   913→   913→                      </button>
+   914→   914→   914→                    </div>
+   915→   915→   915→                  </div>
+   916→   916→   916→                </CardContent>
+   917→   917→   917→              </Card>
+   918→   918→   918→            ))}
+   919→   919→   919→          </div>
+   920→   920→   920→        )}
+   921→   921→   921→      </main>
+   922→   922→   922→    );
+   923→   923→   923→  }
+   924→   924→   924→
+   925→   925→   925→  return null;
+   926→   926→   926→}

@@ -1,0 +1,1134 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+     4→import { useQuery, useMutation } from '@tanstack/react-query';
+     5→import { useUIStore } from '@/stores';
+     6→import { useTranslation } from '@/lib/i18n/use-translation';
+     7→import { isRtl } from '@/lib/i18n';
+     8→import { getDocumentsApi } from '@/features/documents/api';
+     9→import {
+    10→  generateQuestionsApi,
+    11→  submitAnswerApi,
+    12→  completeExamApi,
+    13→} from '@/features/questions/api';
+    14→import type {
+    15→  PracticeSession,
+    16→  ExamResult,
+    17→  SubmittedAnswer,
+    18→  SubmitAnswerResponse,
+    19→} from '@/types';
+    20→
+    21→import {
+    22→  Card,
+    23→  CardContent,
+    24→  CardHeader,
+    25→  CardTitle,
+    26→  CardDescription,
+    27→  CardFooter,
+    28→} from '@/components/ui/card';
+    29→import { Button } from '@/components/ui/button';
+    30→import { Badge } from '@/components/ui/badge';
+    31→import { Skeleton } from '@/components/ui/skeleton';
+    32→import { Progress } from '@/components/ui/progress';
+    33→import { Separator } from '@/components/ui/separator';
+    34→import {
+    35→  Accordion,
+    36→  AccordionItem,
+    37→  AccordionTrigger,
+    38→  AccordionContent,
+    39→} from '@/components/ui/accordion';
+    40→import {
+    41→  FileText,
+    42→  CheckCircle2,
+    43→  XCircle,
+    44→  Clock,
+    45→  ArrowRight,
+    46→  ArrowLeft,
+    47→  RotateCcw,
+    48→  Trophy,
+    49→  AlertTriangle,
+    50→  Loader2,
+    51→  BookOpen,
+    52→  BarChart3,
+    53→} from 'lucide-react';
+    54→import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+    55→
+    56→type Phase = 'select' | 'generating' | 'answering' | 'results';
+    57→
+    58→export default function QuestionPage() {
+    59→  const currentPage = useUIStore((s) => s.currentPage);
+    60→  const locale = useUIStore((s) => s.locale);
+    61→  const navigate = useUIStore((s) => s.navigate);
+    62→  const rtl = isRtl(locale);
+    63→  const t = useTranslation();
+    64→
+    65→  const isExam = currentPage === 'exam';
+    66→
+    67→  // ─── State ───────────────────────────────────────────────
+    68→  const [phase, setPhase] = useState<Phase>('select');
+    69→  const [selectedDocId, setSelectedDocId] = useState<string>('');
+    70→  const [session, setSession] = useState<PracticeSession | null>(null);
+    71→  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+    72→  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+    73→  const [submittedAnswers, setSubmittedAnswers] = useState<SubmittedAnswer[]>([]);
+    74→  const [answerFeedback, setAnswerFeedback] = useState<SubmitAnswerResponse | null>(null);
+    75→  const [submittedForQuestion, setSubmittedForQuestion] = useState<Set<string>>(new Set());
+    76→  const [examResult, setExamResult] = useState<ExamResult | null>(null);
+    77→  const [reviewMode, setReviewMode] = useState(false);
+    78→  const [timeRemaining, setTimeRemaining] = useState(0);
+    79→  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+    80→  const [showRetry, setShowRetry] = useState(false);
+    81→  const [autoSubmitted, setAutoSubmitted] = useState(false);
+    82→  const generatingStartRef = useRef<number>(0);
+    83→
+    84→  // ─── Queries & Mutations ─────────────────────────────────
+    85→  const { data: documents = [] } = useQuery({
+    86→    queryKey: ['documents'],
+    87→    queryFn: getDocumentsApi,
+    88→  });
+    89→
+    90→  const readyDocuments = documents.filter((d) => d.status === 'ready');
+    91→
+    92→  const generateMutation = useMutation({
+    93→    mutationFn: (docId: string) =>
+    94→      generateQuestionsApi(docId, undefined, 5, isExam ? 'exam' : 'practice'),
+    95→    onSuccess: (data) => {
+    96→      setSession(data);
+    97→      setCurrentQuestionIndex(0);
+    98→      setSelectedAnswer(null);
+    99→      setSubmittedAnswers([]);
+   100→      setAnswerFeedback(null);
+   101→      setSubmittedForQuestion(new Set());
+   102→      setPhase('answering');
+   103→      if (data.time_limit_seconds) {
+   104→        setTimeRemaining(data.time_limit_seconds);
+   105→      }
+   106→      setShowRetry(false);
+   107→    },
+   108→    onError: () => {
+   109→      setShowRetry(true);
+   110→    },
+   111→  });
+   112→
+   113→  const submitMutation = useMutation({
+   114→    mutationFn: submitAnswerApi,
+   115→    onSuccess: (data) => {
+   116→      setAnswerFeedback(data);
+   117→      const question = session?.questions[currentQuestionIndex];
+   118→      if (question) {
+   119→        setSubmittedForQuestion((prev) => new Set([...prev, question.id]));
+   120→        setSubmittedAnswers((prev) => [
+   121→          ...prev,
+   122→          {
+   123→            question_id: question.id,
+   124→            selected_option_id: selectedAnswer!,
+   125→            correct: data.correct,
+   126→          },
+   127→        ]);
+   128→      }
+   129→    },
+   130→  });
+   131→
+   132→  const completeExamMutation = useMutation({
+   133→    mutationFn: completeExamApi,
+   134→    onSuccess: (data) => {
+   135→      setExamResult(data);
+   136→      setPhase('results');
+   137→    },
+   138→  });
+   139→
+   140→  // ─── Concept Performance (for practice results) ─────────
+   141→  const conceptPerformance = useMemo(() => {
+   142→    if (!session) return [];
+   143→    const map = new Map<string, { correct: number; total: number }>();
+   144→    for (const q of session.questions) {
+   145→      const answer = submittedAnswers.find((a) => a.question_id === q.id);
+   146→      const entry = map.get(q.concept_name) ?? { correct: 0, total: 0 };
+   147→      entry.total += 1;
+   148→      if (answer?.correct) entry.correct += 1;
+   149→      map.set(q.concept_name, entry);
+   150→    }
+   151→    return Array.from(map.entries()).map(([name, { correct, total }]) => ({
+   152→      name,
+   153→      correct,
+   154→      total,
+   155→      rate: total > 0 ? Math.round((correct / total) * 100) : 0,
+   156→    }));
+   157→  }, [session, submittedAnswers]);
+   158→
+   159→  // ─── Rotating loading messages ───────────────────────────
+   160→  const loadingMessages = [
+   161→    t.practice.analyzing,
+   162→    t.practice.designingQuestion,
+   163→    t.practice.preparingChoices,
+   164→    t.practice.generatingQuestions,
+   165→  ];
+   166→
+   167→  useEffect(() => {
+   168→    if (phase !== 'generating') return;
+   169→    const interval = setInterval(() => {
+   170→      setLoadingMessageIndex((prev) => (prev + 1) % loadingMessages.length);
+   171→    }, 2500);
+   172→    return () => clearInterval(interval);
+   173→  }, [phase, loadingMessages.length]);
+   174→
+   175→  // ─── Retry after 25 seconds ──────────────────────────────
+   176→  useEffect(() => {
+   177→    if (phase !== 'generating') return;
+   178→    generatingStartRef.current = Date.now();
+   179→    const timeout = setTimeout(() => {
+   180→      setShowRetry(true);
+   181→    }, 25000);
+   182→    return () => clearTimeout(timeout);
+   183→  }, [phase]);
+   184→
+   185→  // ─── Exam timer ──────────────────────────────────────────
+   186→  useEffect(() => {
+   187→    if (phase !== 'answering' || !isExam || !session?.time_limit_seconds) return;
+   188→    const interval = setInterval(() => {
+   189→      setTimeRemaining((prev) => {
+   190→        if (prev <= 1) {
+   191→          clearInterval(interval);
+   192→          setAutoSubmitted(true);
+   193→              if (session) {
+   194→                completeExamMutation.mutate(session.id);
+   195→              }
+   196→          return 0;
+   197→        }
+   198→        return prev - 1;
+   199→      });
+   200→    }, 1000);
+   201→    return () => clearInterval(interval);
+   202→  }, [phase, isExam, session?.time_limit_seconds]);
+   203→
+   204→  // ─── Handlers ────────────────────────────────────────────
+   205→  const handleStart = () => {
+   206→    if (!selectedDocId) return;
+   207→    setPhase('generating');
+   208→    setLoadingMessageIndex(0);
+   209→    setShowRetry(false);
+   210→    setAutoSubmitted(false);
+   211→    generateMutation.mutate(selectedDocId);
+   212→  };
+   213→
+   214→  const handleSelectAnswer = (optionId: string) => {
+   215→    if (isExam) {
+   216→      // Exam mode: select and move to next
+   217→      const question = session?.questions[currentQuestionIndex];
+   218→      if (!question) return;
+   219→      setSelectedAnswer(optionId);
+   220→      setSubmittedAnswers((prev) => {
+   221→        const filtered = prev.filter((a) => a.question_id !== question.id);
+   222→        return [...filtered, { question_id: question.id, selected_option_id: optionId, correct: false }];
+   223→      });
+   224→      // Auto-advance after a brief delay
+   225→      setTimeout(() => {
+   226→        if (currentQuestionIndex < (session?.questions.length ?? 0) - 1) {
+   227→          setCurrentQuestionIndex((prev) => prev + 1);
+   228→          setSelectedAnswer(null);
+   229→        }
+   230→      }, 300);
+   231→    } else {
+   232→      // Practice mode: submit immediately
+   233→      const question = session?.questions[currentQuestionIndex];
+   234→      if (!question || submittedForQuestion.has(question.id)) return;
+   235→      setSelectedAnswer(optionId);
+   236→      submitMutation.mutate({
+   237→        session_id: session!.id,
+   238→        question_id: question.id,
+   239→        selected_option_id: optionId,
+   240→      });
+   241→    }
+   242→  };
+   243→
+   244→  const handleNext = () => {
+   245→    if (!session) return;
+   246→    if (currentQuestionIndex < session.questions.length - 1) {
+   247→      setCurrentQuestionIndex((prev) => prev + 1);
+   248→      setSelectedAnswer(null);
+   249→      setAnswerFeedback(null);
+   250→    } else {
+   251→      setPhase('results');
+   252→    }
+   253→  };
+   254→
+   255→  const handlePrev = () => {
+   256→    if (currentQuestionIndex > 0) {
+   257→      setCurrentQuestionIndex((prev) => prev - 1);
+   258→      // Restore state for already-answered questions in practice mode
+   259→      const prevQ = session?.questions[currentQuestionIndex - 1];
+   260→      if (prevQ && !isExam) {
+   261→        const prevAnswer = submittedAnswers.find((a) => a.question_id === prevQ.id);
+   262→        if (prevAnswer) {
+   263→          setSelectedAnswer(prevAnswer.selected_option_id);
+   264→          setAnswerFeedback({
+   265→            correct: prevAnswer.correct,
+   266→            correct_option_id: prevQ.correct_option_id,
+   267→            explanation: prevQ.explanation,
+   268→            concept_id: prevQ.concept_id,
+   269→            concept_name: prevQ.concept_name,
+   270→          });
+   271→        } else {
+   272→          setSelectedAnswer(null);
+   273→          setAnswerFeedback(null);
+   274→        }
+   275→      } else if (prevQ && isExam) {
+   276→        const prevAnswer = submittedAnswers.find((a) => a.question_id === prevQ.id);
+   277→        setSelectedAnswer(prevAnswer?.selected_option_id ?? null);
+   278→      }
+   279→    }
+   280→  };
+   281→
+   282→  const handleExamSubmit = () => {
+   283→    if (!session) return;
+   284→    completeExamMutation.mutate(session.id);
+   285→  };
+   286→
+   287→  const handleNewSession = () => {
+   288→    setPhase('select');
+   289→    setSession(null);
+   290→    setCurrentQuestionIndex(0);
+   291→    setSelectedAnswer(null);
+   292→    setSubmittedAnswers([]);
+   293→    setAnswerFeedback(null);
+   294→    setSubmittedForQuestion(new Set());
+   295→    setExamResult(null);
+   296→    setReviewMode(false);
+   297→    setAutoSubmitted(false);
+   298→    setTimeRemaining(0);
+   299→  };
+   300→
+   301→  const handleViewSkillGraph = (conceptId: string) => {
+   302→    navigate('skill-graph', { conceptId });
+   303→  };
+   304→
+   305→  // ─── Helpers ─────────────────────────────────────────────
+   306→  const formatTime = (seconds: number): string => {
+   307→    const m = Math.floor(seconds / 60);
+   308→    const s = seconds % 60;
+   309→    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+   310→  };
+   311→
+   312→  const allAnswered =
+   313→    session &&
+   314→    session.questions.every((q) =>
+   315→      submittedAnswers.some((a) => a.question_id === q.id)
+   316→    );
+   317→
+   318→  // ─── Render: Document Selection (Phase 1) ────────────────
+   319→  if (phase === 'select') {
+   320→    return (
+   321→      <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+   322→        <Card className={isExam ? 'border-2 border-muted' : ''}>
+   323→          <CardHeader>
+   324→            <CardTitle className="flex items-center gap-3 text-xl">
+   325→              {isExam ? (
+   326→                <BarChart3 className="size-6 text-amber-500" />
+   327→              ) : (
+   328→                <BookOpen className="size-6 text-emerald-500" />
+   329→              )}
+   330→              {isExam ? t.exam.title : t.practice.title}
+   331→            </CardTitle>
+   332→            <CardDescription className="mt-1">
+   333→              {t.practice.selectDocument}
+   334→            </CardDescription>
+   335→            {isExam && (
+   336→              <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
+   337→                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+   338→                <p className="text-sm text-amber-800 dark:text-amber-300">
+   339→                  {t.exam.formalNotice}
+   340→                </p>
+   341→              </div>
+   342→            )}
+   343→          </CardHeader>
+   344→          <CardContent>
+   345→            <div className="space-y-2">
+   346→              {readyDocuments.length === 0 ? (
+   347→                <p className="py-8 text-center text-muted-foreground">
+   348→                  {t.practice.noQuestions}
+   349→                </p>
+   350→              ) : (
+   351→                readyDocuments.map((doc) => (
+   352→                  <button
+   353→                    key={doc.id}
+   354→                    onClick={() => setSelectedDocId(doc.id)}
+   355→                    className={`w-full rounded-lg border p-4 text-start transition-all hover:bg-accent ${
+   356→                      selectedDocId === doc.id
+   357→                        ? isExam
+   358→                          ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30'
+   359→                          : 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30'
+   360→                        : 'border-border'
+   361→                    }`}
+   362→                  >
+   363→                    <div className="flex items-center gap-3">
+   364→                      <FileText className="size-5 shrink-0 text-muted-foreground" />
+   365→                      <div className="flex-1 overflow-hidden">
+   366→                        <p className="truncate font-medium">{doc.title}</p>
+   367→                        <p className="mt-0.5 text-xs text-muted-foreground">
+   368→                          {doc.concept_count} concepts · {doc.question_count} questions
+   369→                        </p>
+   370→                      </div>
+   371→                      {selectedDocId === doc.id && (
+   372→                        <CheckCircle2
+   373→                          className={`size-5 shrink-0 ${
+   374→                            isExam ? 'text-amber-500' : 'text-emerald-500'
+   375→                          }`}
+   376→                        />
+   377→                      )}
+   378→                    </div>
+   379→                  </button>
+   380→                ))
+   381→              )}
+   382→            </div>
+   383→          </CardContent>
+   384→          <CardFooter className="justify-end">
+   385→            <Button
+   386→              size="lg"
+   387→              disabled={!selectedDocId}
+   388→              onClick={handleStart}
+   389→              className={
+   390→                isExam
+   391→                  ? 'bg-amber-600 hover:bg-amber-700'
+   392→                  : 'bg-emerald-600 hover:bg-emerald-700'
+   393→              }
+   394→            >
+   395→              {isExam ? t.exam.startExam : t.practice.startPractice}
+   396→              {rtl ? (
+   397→                <ArrowLeft className="ms-2 size-4" />
+   398→              ) : (
+   399→                <ArrowRight className="me-2 size-4" />
+   400→              )}
+   401→            </Button>
+   402→          </CardFooter>
+   403→        </Card>
+   404→      </main>
+   405→    );
+   406→  }
+   407→
+   408→  // ─── Render: Generating Questions (Phase 2) ──────────────
+   409→  if (phase === 'generating') {
+   410→    return (
+   411→      <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+   412→        {/* Skeleton matching the final question card layout */}
+   413→        <Card className={isExam ? 'border-2 border-muted' : ''}>
+   414→          <CardHeader>
+   415→            <div className="flex items-center justify-between">
+   416→              <Skeleton className="h-5 w-48" />
+   417→              <Skeleton className="h-5 w-24" />
+   418→            </div>
+   419→          </CardHeader>
+   420→          <CardContent className="space-y-4">
+   421→            <Skeleton className="h-6 w-full" />
+   422→            <Skeleton className="h-6 w-3/4" />
+   423→            <div className="space-y-3 pt-2">
+   424→              {[1, 2, 3, 4].map((i) => (
+   425→                <div
+   426→                  key={i}
+   427→                  className="rounded-lg border p-4"
+   428→                >
+   429→                  <Skeleton className="h-5 w-full" />
+   430→                </div>
+   431→              ))}
+   432→            </div>
+   433→          </CardContent>
+   434→          <CardFooter className="justify-between">
+   435→            <Skeleton className="h-9 w-24" />
+   436→            <Skeleton className="h-9 w-24" />
+   437→          </CardFooter>
+   438→        </Card>
+   439→
+   440→        {/* Overlay loading indicator */}
+   441→        <div className="mt-6 flex flex-col items-center gap-4">
+   442→          <div className="flex items-center gap-3">
+   443→            <Loader2 className="size-5 animate-spin text-emerald-500" />
+   444→            <p className="text-sm font-medium text-muted-foreground transition-all duration-300">
+   445→              {loadingMessages[loadingMessageIndex]}
+   446→            </p>
+   447→          </div>
+   448→          <Progress value={((loadingMessageIndex + 1) / loadingMessages.length) * 100} className="w-64" />
+   449→          {showRetry && (
+   450→            <Button variant="outline" onClick={handleStart} className="mt-2">
+   451→              <RotateCcw className="me-2 size-4" />
+   452→              {t.common.retry}
+   453→            </Button>
+   454→          )}
+   455→        </div>
+   456→      </main>
+   457→    );
+   458→  }
+   459→
+   460→  // ─── Render: Answering Questions (Phase 3) ───────────────
+   461→  if (phase === 'answering' && session) {
+   462→    const question = session.questions[currentQuestionIndex];
+   463→    if (!question) return null;
+   464→
+   465→    const isQuestionSubmitted = submittedForQuestion.has(question.id);
+   466→    const currentExamAnswer = isExam
+   467→      ? submittedAnswers.find((a) => a.question_id === question.id)
+   468→      : null;
+   469→
+   470→    return (
+   471→      <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+   472→        {/* Exam timer */}
+   473→        {isExam && session.time_limit_seconds && (
+   474→          <div className="mb-4 flex items-center justify-between rounded-lg border border-muted bg-muted/50 p-3">
+   475→            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+   476→              <Clock className="size-4" />
+   477→              <span>{t.exam.timeRemaining}</span>
+   478→            </div>
+   479→            <span
+   480→              className={`font-mono text-lg font-bold tabular-nums ${
+   481→                timeRemaining < 60
+   482→                  ? 'animate-pulse text-red-500'
+   483→                  : timeRemaining < 180
+   484→                    ? 'text-amber-500'
+   485→                    : 'text-foreground'
+   486→              }`}
+   487→            >
+   488→              {formatTime(timeRemaining)}
+   489→            </span>
+   490→          </div>
+   491→        )}
+   492→
+   493→        {/* Exam question navigation strip */}
+   494→        {isExam && (
+   495→          <div className="mb-4 flex flex-wrap gap-2">
+   496→            {session.questions.map((q, idx) => {
+   497→              const isAnswered = submittedAnswers.some((a) => a.question_id === q.id);
+   498→              const isCurrent = idx === currentQuestionIndex;
+   499→              return (
+   500→                <button
+   501→                  key={q.id}
+   502→                  onClick={() => {
+   503→                    setCurrentQuestionIndex(idx);
+   504→                    const ans = submittedAnswers.find((a) => a.question_id === q.id);
+   505→                    setSelectedAnswer(ans?.selected_option_id ?? null);
+   506→                  }}
+   507→                  className={`flex size-9 items-center justify-center rounded-md text-sm font-medium transition-all ${
+   508→                    isCurrent
+   509→                      ? 'bg-emerald-600 text-white shadow-sm'
+   510→                      : isAnswered
+   511→                        ? 'bg-muted text-muted-foreground'
+   512→                        : 'border border-border bg-background text-foreground hover:bg-accent'
+   513→                  }`}
+   514→                >
+   515→                  {idx + 1}
+   516→                </button>
+   517→              );
+   518→            })}
+   519→          </div>
+   520→        )}
+   521→
+   522→        {/* Question Card */}
+   523→        <Card className={isExam ? 'border-2 border-muted' : ''}>
+   524→          <CardHeader>
+   525→            <div className="flex items-center justify-between">
+   526→              <Badge variant={isExam ? 'outline' : 'secondary'}>
+   527→                {t.practice.questionOf
+   528→                  .replace('{current}', String(currentQuestionIndex + 1))
+   529→                  .replace('{total}', String(session.questions.length))}
+   530→              </Badge>
+   531→              <Badge
+   532→                variant="outline"
+   533→                className={
+   534→                  question.difficulty === 'easy'
+   535→                    ? 'border-emerald-300 text-emerald-600 dark:border-emerald-700 dark:text-emerald-400'
+   536→                    : question.difficulty === 'hard'
+   537→                      ? 'border-red-300 text-red-600 dark:border-red-700 dark:text-red-400'
+   538→                      : 'border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400'
+   539→                }
+   540→              >
+   541→                {question.difficulty}
+   542→              </Badge>
+   543→            </div>
+   544→            <CardTitle className="mt-4 text-lg leading-relaxed">
+   545→              {question.text}
+   546→            </CardTitle>
+   547→          </CardHeader>
+   548→
+   549→          <CardContent>
+   550→            {/* Practice: Progress bar */}
+   551→            {!isExam && (
+   552→              <Progress
+   553→                value={
+   554→                  ((currentQuestionIndex + (isQuestionSubmitted ? 1 : 0)) /
+   555→                    session.questions.length) *
+   556→                  100
+   557→                }
+   558→                className="mb-6"
+   559→              />
+   560→            )}
+   561→
+   562→            {/* Answer options */}
+   563→            <div className="space-y-3">
+   564→              {question.options.map((option) => {
+   565→                const isSelected = (isExam
+   566→                  ? currentExamAnswer?.selected_option_id
+   567→                  : selectedAnswer) === option.id;
+   568→                const isCorrect = option.id === question.correct_option_id;
+   569→                const showResult = !isExam && isQuestionSubmitted;
+   570→
+   571→                let optionClass =
+   572→                  'cursor-pointer rounded-lg border-2 p-4 text-start transition-all hover:bg-accent';
+   573→
+   574→                if (showResult) {
+   575→                  if (isSelected && isCorrect) {
+   576→                    optionClass =
+   577→                      'rounded-lg border-2 border-emerald-500 bg-emerald-50 p-4 text-start dark:bg-emerald-950/30';
+   578→                  } else if (isSelected && !isCorrect) {
+   579→                    optionClass =
+   580→                      'rounded-lg border-2 border-red-500 bg-red-50 p-4 text-start dark:bg-red-950/30';
+   581→                  } else if (!isSelected && isCorrect) {
+   582→                    optionClass =
+   583→                      'rounded-lg border-2 border-emerald-500 bg-emerald-50/50 p-4 text-start dark:bg-emerald-950/20';
+   584→                  } else {
+   585→                    optionClass =
+   586→                      'rounded-lg border-2 border-border p-4 text-start opacity-60';
+   587→                  }
+   588→                } else if (isExam && isSelected) {
+   589→                  optionClass =
+   590→                    'rounded-lg border-2 border-amber-500 bg-amber-50 p-4 text-start dark:bg-amber-950/30';
+   591→                } else if (!isExam && !isQuestionSubmitted) {
+   592→                  optionClass =
+   593→                    'cursor-pointer rounded-lg border-2 border-border p-4 text-start transition-all hover:border-emerald-300 hover:bg-emerald-50/50 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/20';
+   594→                } else {
+   595→                  optionClass =
+   596→                    'rounded-lg border-2 border-border p-4 text-start';
+   597→                }
+   598→
+   599→                return (
+   600→                  <div key={option.id}>
+   601→                    <button
+   602→                      className={optionClass}
+   603→                      onClick={() => handleSelectAnswer(option.id)}
+   604→                      disabled={isQuestionSubmitted || submitMutation.isPending}
+   605→                    >
+   606→                      <div className="flex items-start gap-3">
+   607→                        <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium">
+   608→                          {String.fromCharCode(65 + question.options.indexOf(option))}
+   609→                        </span>
+   610→                        <span className="flex-1 text-sm">{option.text}</span>
+   611→                        {showResult && isSelected && isCorrect && (
+   612→                          <CheckCircle2 className="ms-auto mt-0.5 size-5 shrink-0 text-emerald-500" />
+   613→                        )}
+   614→                        {showResult && isSelected && !isCorrect && (
+   615→                          <XCircle className="ms-auto mt-0.5 size-5 shrink-0 text-red-500" />
+   616→                        )}
+   617→                        {showResult && !isSelected && isCorrect && (
+   618→                          <CheckCircle2 className="ms-auto mt-0.5 size-5 shrink-0 text-emerald-500" />
+   619→                        )}
+   620→                      </div>
+   621→                    </button>
+   622→                    {/* Practice: Accordion with option explanation after submission */}
+   623→                    {showResult && (
+   624→                      <Accordion type="single" collapsible className="mt-1">
+   625→                        <AccordionItem value={option.id} className="border-b-0">
+   626→                          <AccordionTrigger className="ps-4 py-2 text-xs text-muted-foreground hover:no-underline">
+   627→                            {t.practice.explanation}
+   628→                          </AccordionTrigger>
+   629→                          <AccordionContent className="ps-10 text-xs text-muted-foreground">
+   630→                            {option.explanation}
+   631→                          </AccordionContent>
+   632→                        </AccordionItem>
+   633→                      </Accordion>
+   634→                    )}
+   635→                  </div>
+   636→                );
+   637→              })}
+   638→            </div>
+   639→
+   640→            {/* Practice: Feedback after answer */}
+   641→            {!isExam && isQuestionSubmitted && answerFeedback && (
+   642→              <div className="mt-6 space-y-3">
+   643→                <Separator />
+   644→                <div
+   645→                  className={`rounded-lg p-4 ${
+   646→                    answerFeedback.correct
+   647→                      ? 'bg-emerald-50 dark:bg-emerald-950/30'
+   648→                      : 'bg-red-50 dark:bg-red-950/30'
+   649→                  }`}
+   650→                >
+   651→                  <div className="flex items-center gap-2">
+   652→                    {answerFeedback.correct ? (
+   653→                      <>
+   654→                        <CheckCircle2 className="size-5 text-emerald-500" />
+   655→                        <span className="font-medium text-emerald-700 dark:text-emerald-400">
+   656→                          {t.practice.correct}
+   657→                        </span>
+   658→                      </>
+   659→                    ) : (
+   660→                      <>
+   661→                        <XCircle className="size-5 text-red-500" />
+   662→                        <span className="font-medium text-red-700 dark:text-red-400">
+   663→                          {t.practice.incorrect}
+   664→                        </span>
+   665→                      </>
+   666→                    )}
+   667→                  </div>
+   668→                  <p className="mt-2 text-sm text-muted-foreground">
+   669→                    {answerFeedback.explanation}
+   670→                  </p>
+   671→                  <div className="mt-3 flex items-center gap-2">
+   672→                    <span className="text-xs text-muted-foreground">
+   673→                      {t.practice.relatedConcept}:
+   674→                    </span>
+   675→                    <button
+   676→                      onClick={() => handleViewSkillGraph(answerFeedback.concept_id)}
+   677→                      className="text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+   678→                    >
+   679→                      {answerFeedback.concept_name}
+   680→                    </button>
+   681→                  </div>
+   682→                </div>
+   683→              </div>
+   684→            )}
+   685→          </CardContent>
+   686→
+   687→          <CardFooter className="justify-between">
+   688→            <Button
+   689→              variant="outline"
+   690→              onClick={handlePrev}
+   691→              disabled={currentQuestionIndex === 0}
+   692→            >
+   693→              {rtl ? (
+   694→                <ArrowRight className="me-2 size-4" />
+   695→              ) : (
+   696→                <ArrowLeft className="me-2 size-4" />
+   697→              )}
+   698→              {t.common.back}
+   699→            </Button>
+   700→
+   701→            {isExam ? (
+   702→              <div className="flex gap-2">
+   703→                {currentQuestionIndex < session.questions.length - 1 ? (
+   704→                  <Button onClick={handleNext}>
+   705→                    {t.common.next}
+   706→                    {rtl ? (
+   707→                      <ArrowLeft className="ms-2 size-4" />
+   708→                    ) : (
+   709→                      <ArrowRight className="ms-2 size-4" />
+   710→                    )}
+   711→                  </Button>
+   712→                ) : (
+   713→                  <Button
+   714→                    onClick={handleExamSubmit}
+   715→                    disabled={completeExamMutation.isPending}
+   716→                    className="bg-amber-600 hover:bg-amber-700"
+   717→                  >
+   718→                    {completeExamMutation.isPending && (
+   719→                      <Loader2 className="me-2 size-4 animate-spin" />
+   720→                    )}
+   721→                    {t.common.submit}
+   722→                  </Button>
+   723→                )}
+   724→              </div>
+   725→            ) : (
+   726→              <Button
+   727→                onClick={handleNext}
+   728→                disabled={
+   729→                  !isQuestionSubmitted ||
+   730→                  currentQuestionIndex === session.questions.length - 1
+   731→                    ? !isQuestionSubmitted
+   732→                    : false
+   733→                }
+   734→              >
+   735→                {currentQuestionIndex === session.questions.length - 1
+   736→                  ? t.practice.sessionComplete
+   737→                  : t.common.next}
+   738→                {currentQuestionIndex < session.questions.length - 1 &&
+   739→                  (rtl ? (
+   740→                    <ArrowLeft className="ms-2 size-4" />
+   741→                  ) : (
+   742→                    <ArrowRight className="ms-2 size-4" />
+   743→                  ))}
+   744→              </Button>
+   745→            )}
+   746→          </CardFooter>
+   747→        </Card>
+   748→      </main>
+   749→    );
+   750→  }
+   751→
+   752→  // ─── Render: Results (Phase 4) ───────────────────────────
+   753→  if (phase === 'results') {
+   754→    const correctCount = isExam
+   755→      ? examResult?.correct_count ?? 0
+   756→      : submittedAnswers.filter((a) => a.correct).length;
+   757→    const totalQuestions = isExam
+   758→      ? examResult?.total_questions ?? 0
+   759→      : session?.questions.length ?? 0;
+   760→    const incorrectCount = totalQuestions - correctCount;
+   761→    const scorePercent = totalQuestions > 0
+   762→      ? Math.round((correctCount / totalQuestions) * 100)
+   763→      : 0;
+   764→
+   765→    // Donut chart data
+   766→    const pieData = [
+   767→      { name: 'correct', value: correctCount },
+   768→      ...(incorrectCount > 0 ? [{ name: 'incorrect', value: incorrectCount }] : []),
+   769→    ];
+   770→    // noop label — center text rendered via absolute overlay
+   771→    const renderCustomLabel = () => null;
+   772→
+   773→    // Format time as "Xm Ys"
+   774→    const formatTimeLong = (seconds: number): string => {
+   775→      const m = Math.floor(seconds / 60);
+   776→      const s = seconds % 60;
+   777→      if (m === 0) return `${s}${t.exam.seconds}`;
+   778→      return `${m}${t.exam.minutes} ${s}${t.exam.seconds}`;
+   779→    };
+   780→
+   781→    return (
+   782→      <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+   783→        {autoSubmitted && (
+   784→          <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
+   785→            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+   786→            <p className="text-sm text-amber-800 dark:text-amber-300">
+   787→              {t.exam.autoSubmitWarning}
+   788→            </p>
+   789→          </div>
+   790→        )}
+   791→
+   792→        {/* ═══ Practice Results ═══ */}
+   793→        {!isExam && (
+   794→          <Card>
+   795→            <CardHeader className="items-center text-center">
+   796→              <CardTitle className="text-xl">
+   797→                {t.practice.sessionComplete}
+   798→              </CardTitle>
+   799→            </CardHeader>
+   800→            <CardContent className="space-y-6">
+   801→              {/* Donut Chart */}
+   802→              <div className="flex justify-center">
+   803→                <div className="relative size-40 sm:size-48">
+   804→                  <ResponsiveContainer width="100%" height="100%">
+   805→                    <PieChart>
+   806→                      <Pie
+   807→                        data={pieData}
+   808→                        cx="50%"
+   809→                        cy="50%"
+   810→                        innerRadius={60}
+   811→                        outerRadius={80}
+   812→                        dataKey="value"
+   813→                        startAngle={90}
+   814→                        endAngle={-270}
+   815→                        strokeWidth={0}
+   816→                        label={renderCustomLabel}
+   817→                      >
+   818→                        {pieData.map((entry, index) => (
+   819→                          <Cell
+   820→                            key={`cell-${index}`}
+   821→                            fill={entry.name === 'correct' ? '#10b981' : '#ef4444'}
+   822→                          />
+   823→                        ))}
+   824→                      </Pie>
+   825→                    </PieChart>
+   826→                  </ResponsiveContainer>
+   827→                  {/* Center text overlay */}
+   828→                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+   829→                    <span
+   830→                      className={`text-3xl font-bold ${
+   831→                        scorePercent >= 70
+   832→                          ? 'text-emerald-600 dark:text-emerald-400'
+   833→                          : scorePercent >= 40
+   834→                            ? 'text-amber-600 dark:text-amber-400'
+   835→                            : 'text-red-600 dark:text-red-400'
+   836→                      }`}
+   837→                    >
+   838→                      {scorePercent}%
+   839→                    </span>
+   840→                    <span className="text-xs text-muted-foreground">
+   841→                      {t.dashboard.successRate}
+   842→                    </span>
+   843→                  </div>
+   844→                </div>
+   845→              </div>
+   846→
+   847→              {/* Score text below donut */}
+   848→              <div className="flex items-center justify-center gap-2">
+   849→                <div
+   850→                  className={`flex size-10 items-center justify-center rounded-full ${
+   851→                    scorePercent >= 70
+   852→                      ? 'bg-emerald-100 dark:bg-emerald-950/40'
+   853→                      : scorePercent >= 40
+   854→                        ? 'bg-amber-100 dark:bg-amber-950/40'
+   855→                        : 'bg-red-100 dark:bg-red-950/40'
+   856→                  }`}
+   857→                >
+   858→                  <Trophy
+   859→                    className={`size-5 ${
+   860→                      scorePercent >= 70
+   861→                        ? 'text-emerald-600 dark:text-emerald-400'
+   862→                        : scorePercent >= 40
+   863→                          ? 'text-amber-600 dark:text-amber-400'
+   864→                          : 'text-red-600 dark:text-red-400'
+   865→                    }`}
+   866→                  />
+   867→                </div>
+   868→                <p className="text-lg font-semibold">
+   869→                  {correctCount}/{totalQuestions} — {t.practice.score}
+   870→                </p>
+   871→              </div>
+   872→
+   873→              {/* Concept Performance Summary */}
+   874→              {conceptPerformance.length > 0 && (
+   875→                <div className="space-y-3">
+   876→                  <h4 className="flex items-center gap-2 text-sm font-semibold">
+   877→                    <BarChart3 className="size-4 text-muted-foreground" />
+   878→                    {t.dashboard.conceptPerformance}
+   879→                  </h4>
+   880→                  <div className="space-y-2">
+   881→                    {conceptPerformance.map((cp) => {
+   882→                      const barColor =
+   883→                        cp.rate >= 70
+   884→                          ? 'bg-emerald-500'
+   885→                          : cp.rate >= 40
+   886→                            ? 'bg-amber-500'
+   887→                            : 'bg-red-500';
+   888→                      const textColor =
+   889→                        cp.rate >= 70
+   890→                          ? 'text-emerald-600 dark:text-emerald-400'
+   891→                          : cp.rate >= 40
+   892→                            ? 'text-amber-600 dark:text-amber-400'
+   893→                            : 'text-red-600 dark:text-red-400';
+   894→                      return (
+   895→                        <div key={cp.name} className="space-y-1">
+   896→                          <div className="flex items-center justify-between text-sm">
+   897→                            <span className="truncate pe-2 font-medium">{cp.name}</span>
+   898→                            <span className={`shrink-0 text-xs font-semibold ${textColor}`}>
+   899→                              {cp.correct}/{cp.total}
+   900→                            </span>
+   901→                          </div>
+   902→                          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+   903→                            <div
+   904→                              className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+   905→                              style={{ width: `${cp.rate}%` }}
+   906→                            />
+   907→                          </div>
+   908→                        </div>
+   909→                      );
+   910→                    })}
+   911→                  </div>
+   912→                </div>
+   913→              )}
+   914→
+   915→              {/* Action buttons */}
+   916→              <div className="flex flex-wrap items-center justify-center gap-3">
+   917→                <Button
+   918→                  variant="outline"
+   919→                  onClick={() => setReviewMode((prev) => !prev)}
+   920→                >
+   921→                  {t.practice.reviewAnswers}
+   922→                </Button>
+   923→                <Button
+   924→                  onClick={handleNewSession}
+   925→                  className="bg-emerald-600 hover:bg-emerald-700"
+   926→                >
+   927→                  {t.practice.newSession}
+   928→                </Button>
+   929→              </div>
+   930→            </CardContent>
+   931→          </Card>
+   932→        )}
+   933→
+   934→        {/* ═══ Exam Results ═══ */}
+   935→        {isExam && examResult && (
+   936→          <Card className="border-2 border-muted">
+   937→            <CardHeader className="items-center text-center">
+   938→              <CardTitle className="text-xl">
+   939→                {t.exam.examComplete}
+   940→              </CardTitle>
+   941→              <CardDescription className="mt-1">
+   942→                {t.exam.results}
+   943→              </CardDescription>
+   944→            </CardHeader>
+   945→            <CardContent className="space-y-6">
+   946→              {/* Donut Chart with amber accent */}
+   947→              <div className="flex justify-center">
+   948→                <div className="relative size-40 sm:size-48">
+   949→                  <ResponsiveContainer width="100%" height="100%">
+   950→                    <PieChart>
+   951→                      <Pie
+   952→                        data={pieData}
+   953→                        cx="50%"
+   954→                        cy="50%"
+   955→                        innerRadius={60}
+   956→                        outerRadius={80}
+   957→                        dataKey="value"
+   958→                        startAngle={90}
+   959→                        endAngle={-270}
+   960→                        strokeWidth={0}
+   961→                        label={renderCustomLabel}
+   962→                      >
+   963→                        {pieData.map((entry, index) => (
+   964→                          <Cell
+   965→                            key={`cell-${index}`}
+   966→                            fill={entry.name === 'correct' ? '#d97706' : '#ef4444'}
+   967→                          />
+   968→                        ))}
+   969→                      </Pie>
+   970→                    </PieChart>
+   971→                  </ResponsiveContainer>
+   972→                  {/* Center text overlay */}
+   973→                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+   974→                    <span
+   975→                      className={`text-3xl font-bold ${
+   976→                        scorePercent >= 70
+   977→                          ? 'text-amber-600 dark:text-amber-400'
+   978→                          : scorePercent >= 40
+   979→                            ? 'text-amber-600 dark:text-amber-400'
+   980→                            : 'text-red-600 dark:text-red-400'
+   981→                      }`}
+   982→                    >
+   983→                      {scorePercent}%
+   984→                    </span>
+   985→                    <span className="text-xs text-muted-foreground">
+   986→                      {t.dashboard.successRate}
+   987→                    </span>
+   988→                  </div>
+   989→                </div>
+   990→              </div>
+   991→
+   992→              {/* Score and Time stats */}
+   993→              <div className="grid grid-cols-3 gap-4">
+   994→                {/* Score */}
+   995→                <div className="text-center">
+   996→                  <p className="text-2xl font-bold">{correctCount}/{totalQuestions}</p>
+   997→                  <p className="mt-1 text-xs text-muted-foreground">
+   998→                    {t.exam.score}
+   999→                  </p>
+  1000→                </div>
+  1001→                {/* Success Rate */}
+  1002→                <div className="text-center">
+  1003→                  <div
+  1004→                    className={`flex size-10 mx-auto items-center justify-center rounded-full ${
+  1005→                      scorePercent >= 70
+  1006→                        ? 'bg-amber-100 dark:bg-amber-950/40'
+  1007→                        : 'bg-red-100 dark:bg-red-950/40'
+  1008→                    }`}
+  1009→                  >
+  1010→                    <Trophy
+  1011→                      className={`size-5 ${
+  1012→                        scorePercent >= 70
+  1013→                          ? 'text-amber-600 dark:text-amber-400'
+  1014→                          : 'text-red-600 dark:text-red-400'
+  1015→                      }`}
+  1016→                    />
+  1017→                  </div>
+  1018→                  <p className="mt-1 text-xs text-muted-foreground">
+  1019→                    {t.dashboard.successRate}
+  1020→                  </p>
+  1021→                </div>
+  1022→                {/* Time Taken */}
+  1023→                <div className="text-center">
+  1024→                  <div className="flex items-center justify-center gap-1.5">
+  1025→                    <Clock className="size-5 text-amber-500" />
+  1026→                    <p className="text-2xl font-bold">
+  1027→                      {formatTime(examResult.time_taken_seconds)}
+  1028→                    </p>
+  1029→                  </div>
+  1030→                  <p className="mt-1 text-xs text-muted-foreground">
+  1031→                    {t.dashboard.timeSpent}
+  1032→                  </p>
+  1033→                </div>
+  1034→              </div>
+  1035→
+  1036→              {/* Time Taken prominent display */}
+  1037→              <div className="flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
+  1038→                <Clock className="size-4 text-amber-600 dark:text-amber-400" />
+  1039→                <span className="text-sm font-medium text-amber-800 dark:text-amber-300">
+  1040→                  {t.exam.timeTaken}: {formatTimeLong(examResult.time_taken_seconds)}
+  1041→                </span>
+  1042→              </div>
+  1043→
+  1044→              {/* Action buttons */}
+  1045→              <div className="flex flex-wrap items-center justify-center gap-3">
+  1046→                <Button
+  1047→                  variant="outline"
+  1048→                  onClick={() => setReviewMode((prev) => !prev)}
+  1049→                >
+  1050→                  {t.exam.reviewAnswers}
+  1051→                </Button>
+  1052→                <Button
+  1053→                  onClick={() => navigate('dashboard')}
+  1054→                  className="bg-amber-600 hover:bg-amber-700"
+  1055→                >
+  1056→                  {t.dashboard.backToDashboard}
+  1057→                </Button>
+  1058→              </div>
+  1059→            </CardContent>
+  1060→          </Card>
+  1061→        )}
+  1062→
+  1063→        {/* Review section */}
+  1064→        {reviewMode && session && (
+  1065→          <div className="mt-6 space-y-4">
+  1066→            <h3 className="text-lg font-semibold">
+  1067→              {isExam ? t.exam.reviewAnswers : t.practice.reviewAnswers}
+  1068→            </h3>
+  1069→            {(isExam && examResult
+  1070→              ? examResult.answers
+  1071→              : session.questions.map((q, idx) => {
+  1072→                  const answer = submittedAnswers.find((a) => a.question_id === q.id);
+  1073→                  return {
+  1074→                    question_id: q.id,
+  1075→                    question_text: q.text,
+  1076→                    selected_option_id: answer?.selected_option_id ?? '',
+  1077→                    correct_option_id: q.correct_option_id,
+  1078→                    correct: answer?.correct ?? false,
+  1079→                    concept_name: q.concept_name,
+  1080→                    explanation: q.explanation,
+  1081→                  };
+  1082→                })
+  1083→            ).map((item, idx) => (
+  1084→              <Card key={item.question_id} className="overflow-hidden">
+  1085→                <CardContent className="p-4 sm:p-6">
+  1086→                  <div className="flex items-start gap-3">
+  1087→                    <span
+  1088→                      className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${
+  1089→                        item.correct
+  1090→                          ? 'bg-emerald-500'
+  1091→                          : 'bg-red-500'
+  1092→                      }`}
+  1093→                    >
+  1094→                      {idx + 1}
+  1095→                    </span>
+  1096→                    <div className="flex-1 space-y-2">
+  1097→                      <p className="text-sm font-medium">{item.question_text}</p>
+  1098→                      {!item.correct && item.selected_option_id && (
+  1099→                        <div className="rounded-md border border-red-200 bg-red-50 ps-4 pe-3 py-2 dark:border-red-800 dark:bg-red-950/30">
+  1100→                          <p className="text-xs font-medium text-red-600 dark:text-red-400">
+  1101→                            {t.practice.correctAnswer}
+  1102→                          </p>
+  1103→                          <p className="mt-0.5 text-sm text-muted-foreground">
+  1104→                            {session.questions
+  1105→                              .find((q) => q.id === item.question_id)
+  1106→                              ?.options.find((o) => o.id === item.correct_option_id)
+  1107→                              ?.text}
+  1108→                          </p>
+  1109→                        </div>
+  1110→                      )}
+  1111→                      <p className="text-xs text-muted-foreground">
+  1112→                        {item.explanation}
+  1113→                      </p>
+  1114→                      <button
+  1115→                        onClick={() => handleViewSkillGraph(
+  1116→                          session.questions.find((q) => q.id === item.question_id)?.concept_id ?? ''
+  1117→                        )}
+  1118→                        className="text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+  1119→                      >
+  1120→                        {t.practice.relatedConcept}: {item.concept_name}
+  1121→                      </button>
+  1122→                    </div>
+  1123→                  </div>
+  1124→                </CardContent>
+  1125→              </Card>
+  1126→            ))}
+  1127→          </div>
+  1128→        )}
+  1129→      </main>
+  1130→    );
+  1131→  }
+  1132→
+  1133→  return null;
+  1134→}

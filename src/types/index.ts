@@ -1,0 +1,43 @@
+export type { LoginRequest, RegisterRequest, AuthResponse, User } from './auth';
+export type { Document, UploadResponse } from './document';
+export type {
+  Question,
+  AnswerOption,
+  SubmitAnswerRequest,
+  SubmitAnswerResponse,
+  GenerateQuestionsRequest,
+  PracticeSession,
+  SubmittedAnswer,
+  ExamResult,
+  ExamAnswerResult,
+} from './question';
+export type { SkillGraphData, SkillNode, SkillEdge, ConceptDetail } from './skill-graph';
+export type {
+  CareerOption,
+  CareerSimulationRequest,
+  CareerSimulationResponse,
+  WeakConcept as CareerWeakConcept,
+  CareerStage,
+} from './career';
+export type { DashboardStats, RecentActivity, WeakConcept } from './dashboard';
+
+export type AppPage =
+  | 'login'
+  | 'register'
+  | 'dashboard'
+  | 'documents'
+  | 'document-detail'
+  | 'practice'
+  | 'exam'
+  | 'skill-graph'
+  | 'career-simulation'
+  | 'settings';
+
+export type Locale = 'fa' | 'en' | 'ar';
+
+export type ByokScope = 'question_generation' | 'career_simulation' | 'both';
+
+export interface ByokSettings {
+  api_key_masked: string;
+  scope: ByokScope;
+}
