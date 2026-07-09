@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import { useUIStore, useAuthStore } from '@/stores';
 import { Header } from '@/components/shared/header';
@@ -69,5 +70,9 @@ function PageRouter({ page }: { page: string }) {
 }
 
 export default function Page() {
-  return <AppContent />;
+  return (
+    <Suspense fallback={null}>
+      <AppContent />
+    </Suspense>
+  );
 }
