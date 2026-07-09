@@ -78,7 +78,11 @@
     "timeSpent": "الوقت المستغرق",
     "documents": "المستندات",
     "hours": "س",
-    "minutes": "د"
+    "minutes": "د",
+    "activityHeatmap": "النشاط الشهري",
+    "activityLegendLess": "أقل",
+    "activityLegendMore": "أكثر",
+    "activityTooltip": "{count} أسئلة"
   },
   "workspace": {
     "backToDashboard": "العودة إلى لوحة التحكم",

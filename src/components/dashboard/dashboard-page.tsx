@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from '@/lib/i18n/use-translation';
 import { useUIStore, useAuthStore } from '@/stores';
 import { useWorkspaces, useCreateWorkspace } from '@/features/workspaces/hooks';
@@ -35,6 +35,8 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import type { Workspace } from '@/types';
+import { ActivityHeatmap, type ActivityDay } from '@/components/dashboard/activity-heatmap';
+import { getMonthlyActivityApi } from '@/features/dashboard/api';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -275,6 +277,16 @@ export function DashboardPage() {
   const [workspaceName, setWorkspaceName] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState('📐');
 
+  // Activity heatmap data
+  const [activityData, setActivityData] = useState<ActivityDay[]>([]);
+  const [activityLoading, setActivityLoading] = useState(true);
+
+  useEffect(() => {
+    getMonthlyActivityApi()
+      .then(setActivityData)
+      .finally(() => setActivityLoading(false));
+  }, []);
+
   const userName = user?.name ?? '';
 
   // Computed stats from workspace data
@@ -355,6 +367,34 @@ export function DashboardPage() {
               iconColor="text-amber-600 dark:text-amber-400"
             />
           </>
+        )}
+      </section>
+
+      {/* ── Monthly Activity Heatmap ─────────────────────────────────────── */}
+      <section aria-label={t.dashboard.activityHeatmap}>
+        {activityLoading ? (
+          <Card>
+            <CardHeader className="pb-2">
+              <Skeleton className="h-5 w-32" />
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-1">
+                {Array.from({ length: 30 }).map((_, i) => (
+                  <Skeleton key={i} className="size-3 rounded-sm" />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <ActivityHeatmap
+            data={activityData}
+            title={t.dashboard.activityHeatmap}
+            legendLess={t.dashboard.activityLegendLess}
+            legendMore={t.dashboard.activityLegendMore}
+            tooltipLabel={(date, count) =>
+              t.dashboard.activityTooltip.replace('{count}', String(count))
+            }
+          />
         )}
       </section>
 

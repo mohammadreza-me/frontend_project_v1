@@ -112,3 +112,24 @@ export async function getSubjectDistributionApi(): Promise<SubjectDistributionIt
     { name: 'AI/ML', value: 15, color: '#dc2626' },
   ];
 }
+
+export interface DailyActivityItem {
+  date: string;
+  count: number;
+}
+
+export async function getMonthlyActivityApi(): Promise<DailyActivityItem[]> {
+  await delay();
+  const data: DailyActivityItem[] = [];
+  const today = new Date();
+
+  for (let i = 29; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+    const dateStr = date.toISOString().split('T')[0];
+    const count = Math.floor(Math.random() * 15);
+    data.push({ date: dateStr, count });
+  }
+
+  return data;
+}

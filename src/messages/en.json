@@ -78,7 +78,11 @@
     "timeSpent": "Time Spent",
     "documents": "Documents",
     "hours": "h",
-    "minutes": "min"
+    "minutes": "min",
+    "activityHeatmap": "Monthly Activity",
+    "activityLegendLess": "Less",
+    "activityLegendMore": "More",
+    "activityTooltip": "{count} questions"
   },
   "workspace": {
     "backToDashboard": "Back to Dashboard",

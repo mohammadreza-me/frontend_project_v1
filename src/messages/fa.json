@@ -78,7 +78,11 @@
     "timeSpent": "زمان صرف شده",
     "documents": "مدارک",
     "hours": "س",
-    "minutes": "د"
+    "minutes": "د",
+    "activityHeatmap": "فعالیت ماهانه",
+    "activityLegendLess": "کمتر",
+    "activityLegendMore": "بیشتر",
+    "activityTooltip": "{count} سؤال"
   },
   "workspace": {
     "backToDashboard": "بازگشت به داشبورد",
