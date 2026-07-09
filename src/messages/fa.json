@@ -82,7 +82,11 @@
     "activityHeatmap": "فعالیت ماهانه",
     "activityLegendLess": "کمتر",
     "activityLegendMore": "بیشتر",
-    "activityTooltip": "{count} سؤال"
+    "activityTooltip": "{count} سؤال",
+    "archiveWorkspace": "بایگانی",
+    "activateWorkspace": "فعال‌سازی",
+    "archivedWorkspaces": "فضای کاری بایگانی‌شده",
+    "workspaceOptions": "گزینه‌های فضای کاری"
   },
   "workspace": {
     "backToDashboard": "بازگشت به داشبورد",

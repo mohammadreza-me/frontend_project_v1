@@ -7,6 +7,7 @@ import {
   getWorkspaceTagsApi,
   getConceptTreeApi,
   getConceptHistoryApi,
+  toggleWorkspaceStatusApi,
 } from './api';
 import type { CreateWorkspaceRequest } from '@/types';
 
@@ -18,6 +19,14 @@ export function useCreateWorkspace() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateWorkspaceRequest) => createWorkspaceApi(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workspaces'] }),
+  });
+}
+
+export function useToggleWorkspaceStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (workspaceId: string) => toggleWorkspaceStatusApi(workspaceId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['workspaces'] }),
   });
 }

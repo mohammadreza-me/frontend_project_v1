@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from '@/lib/i18n/use-translation';
 import { useUIStore, useAuthStore } from '@/stores';
-import { useWorkspaces, useCreateWorkspace } from '@/features/workspaces/hooks';
+import { useWorkspaces, useCreateWorkspace, useToggleWorkspaceStatus } from '@/features/workspaces/hooks';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -26,6 +26,12 @@ import {
   TooltipProvider,
 } from '@/components/ui/tooltip';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   MessageSquare,
   TrendingUp,
   Target,
@@ -33,6 +39,9 @@ import {
   Plus,
   Clock,
   HelpCircle,
+  MoreVertical,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react';
 import type { Workspace } from '@/types';
 import { ActivityHeatmap, type ActivityDay } from '@/components/dashboard/activity-heatmap';
@@ -140,7 +149,12 @@ interface WorkspaceCardProps {
   conceptsLabel: string;
   documentsLabel: string;
   coverageLabel: string;
+  coverageInfoLabel?: string;
+  archiveLabel: string;
+  activateLabel: string;
+  optionsLabel: string;
   onClick: () => void;
+  onToggleStatus: () => void;
 }
 
 function WorkspaceCard({
@@ -150,14 +164,58 @@ function WorkspaceCard({
   documentsLabel,
   coverageLabel,
   coverageInfoLabel,
+  archiveLabel,
+  activateLabel,
+  optionsLabel,
   onClick,
-}: WorkspaceCardProps & { coverageInfoLabel?: string }) {
+  onToggleStatus,
+}: WorkspaceCardProps) {
+  const handleToggleStatus = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onToggleStatus();
+  };
+
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className="group rounded-xl border bg-card p-4 text-start transition-all duration-200 hover:border-emerald-300 hover:shadow-md"
+      onKeyDown={(e) => e.key === 'Enter' && onClick()}
+      className={`group relative rounded-xl border bg-card p-4 text-start transition-all duration-200 hover:shadow-md ${
+        ws.isActive
+          ? 'hover:border-emerald-300'
+          : 'opacity-60 grayscale hover:opacity-80 hover:grayscale-[50%]'
+      }`}
     >
+      {/* Dropdown Menu */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            onClick={(e) => e.stopPropagation()}
+            className="absolute right-2 top-2 rounded-md p-1 opacity-0 transition-opacity hover:bg-muted group-focus-within:opacity-100 group-hover:opacity-100"
+            aria-label={optionsLabel}
+          >
+            <MoreVertical className="size-4 text-muted-foreground" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={handleToggleStatus}>
+            {ws.isActive ? (
+              <>
+                <Archive className="mr-2 size-4" />
+                {archiveLabel}
+              </>
+            ) : (
+              <>
+                <ArchiveRestore className="mr-2 size-4" />
+                {activateLabel}
+              </>
+            )}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
       {/* Icon + Name + Coverage */}
       <div className="flex items-start gap-3">
         <span
@@ -212,7 +270,7 @@ function WorkspaceCard({
           {ws.documentCount} {documentsLabel}
         </span>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -271,6 +329,16 @@ export function DashboardPage() {
 
   const { data: workspaces, isLoading } = useWorkspaces();
   const createWorkspace = useCreateWorkspace();
+  const toggleWorkspaceStatus = useToggleWorkspaceStatus();
+
+  // Split workspaces into active and archived
+  const { activeWorkspaces, archivedWorkspaces } = useMemo(() => {
+    if (!workspaces) return { activeWorkspaces: [], archivedWorkspaces: [] };
+    return {
+      activeWorkspaces: workspaces.filter((ws) => ws.isActive),
+      archivedWorkspaces: workspaces.filter((ws) => !ws.isActive),
+    };
+  }, [workspaces]);
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -289,11 +357,12 @@ export function DashboardPage() {
 
   const userName = user?.name ?? '';
 
-  // Computed stats from workspace data
+  // Computed stats from ACTIVE workspace data only
+  // Inactive/archived workspaces are excluded from global metrics
   const totalAnswers = useMemo(() => {
-    if (!workspaces) return 0;
-    return workspaces.reduce((sum, ws) => sum + ws.questionCount, 0);
-  }, [workspaces]);
+    if (!activeWorkspaces) return 0;
+    return activeWorkspaces.reduce((sum, ws) => sum + ws.questionCount, 0);
+  }, [activeWorkspaces]);
 
   const handleCreate = () => {
     if (!workspaceName.trim()) return;
@@ -398,7 +467,7 @@ export function DashboardPage() {
         )}
       </section>
 
-      {/* ── Workspaces Section ──────────────────────────────────────────── */}
+      {/* ── Active Workspaces Section ──────────────────────────────────────────── */}
       <section aria-label={t.dashboard.activeWorkspaces}>
         {/* Header row with title + create button */}
         <div className="mb-4 flex items-center justify-between">
@@ -479,16 +548,16 @@ export function DashboardPage() {
           </Dialog>
         </div>
 
-        {/* Workspace cards grid */}
+        {/* Active workspace cards grid */}
         {isLoading ? (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 4 }).map((_, i) => (
+            {Array.from({ length: 3 }).map((_, i) => (
               <WorkspaceCardSkeleton key={i} />
             ))}
           </div>
-        ) : workspaces && workspaces.length > 0 ? (
+        ) : activeWorkspaces.length > 0 ? (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {workspaces.map((ws) => (
+            {activeWorkspaces.map((ws) => (
               <WorkspaceCard
                 key={ws.id}
                 ws={ws}
@@ -497,14 +566,18 @@ export function DashboardPage() {
                 documentsLabel={t.dashboard.documents}
                 coverageLabel={t.dashboard.coverage}
                 coverageInfoLabel={t.dashboard.coverageInfo}
+                archiveLabel={t.dashboard.archiveWorkspace}
+                activateLabel={t.dashboard.activateWorkspace}
+                optionsLabel={t.dashboard.workspaceOptions}
                 onClick={() =>
                   navigate('workspace', { workspaceId: ws.id })
                 }
+                onToggleStatus={() => toggleWorkspaceStatus.mutate(ws.id)}
               />
             ))}
           </div>
         ) : (
-          /* Empty state */
+          /* Empty state for active workspaces */
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-muted/50">
@@ -529,6 +602,41 @@ export function DashboardPage() {
           </Card>
         )}
       </section>
+
+      {/* ── Archived Workspaces Section (Collapsible) ────────────────────────── */}
+      {archivedWorkspaces.length > 0 && (
+        <section aria-label={t.dashboard.archivedWorkspaces}>
+          <details className="group">
+            <summary className="mb-3 flex cursor-pointer items-center gap-2 text-base font-semibold text-muted-foreground list-none">
+              <span className="transition-transform group-open:rotate-90">
+                <Plus className="size-4" />
+              </span>
+              {t.dashboard.archivedWorkspaces}
+              <span className="text-sm font-normal">({archivedWorkspaces.length})</span>
+            </summary>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {archivedWorkspaces.map((ws) => (
+                <WorkspaceCard
+                  key={ws.id}
+                  ws={ws}
+                  questionsLabel={t.common.questions}
+                  conceptsLabel={t.dashboard.concepts}
+                  documentsLabel={t.dashboard.documents}
+                  coverageLabel={t.dashboard.coverage}
+                  coverageInfoLabel={t.dashboard.coverageInfo}
+                  archiveLabel={t.dashboard.archiveWorkspace}
+                  activateLabel={t.dashboard.activateWorkspace}
+                  optionsLabel={t.dashboard.workspaceOptions}
+                  onClick={() =>
+                    navigate('workspace', { workspaceId: ws.id })
+                  }
+                  onToggleStatus={() => toggleWorkspaceStatus.mutate(ws.id)}
+                />
+              ))}
+            </div>
+          </details>
+        </section>
+      )}
 
       {/* ── Weekly Activity ─────────────────────────────────────────────── */}
       <section aria-label={t.dashboard.weeklyActivity}>

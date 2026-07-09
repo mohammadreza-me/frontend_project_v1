@@ -82,7 +82,11 @@
     "activityHeatmap": "Monthly Activity",
     "activityLegendLess": "Less",
     "activityLegendMore": "More",
-    "activityTooltip": "{count} questions"
+    "activityTooltip": "{count} questions",
+    "archiveWorkspace": "Archive",
+    "activateWorkspace": "Activate",
+    "archivedWorkspaces": "Archived Workspaces",
+    "workspaceOptions": "Workspace options"
   },
   "workspace": {
     "backToDashboard": "Back to Dashboard",

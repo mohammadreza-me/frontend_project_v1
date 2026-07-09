@@ -8,6 +8,7 @@ export interface Workspace {
   generatedQuestionCount: number;
   documentCount: number;
   createdAt: string;
+  isActive: boolean;
 }
 
 export interface WorkspaceStats {

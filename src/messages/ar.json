@@ -82,7 +82,11 @@
     "activityHeatmap": "النشاط الشهري",
     "activityLegendLess": "أقل",
     "activityLegendMore": "أكثر",
-    "activityTooltip": "{count} أسئلة"
+    "activityTooltip": "{count} أسئلة",
+    "archiveWorkspace": "أرشفة",
+    "activateWorkspace": "تفعيل",
+    "archivedWorkspaces": "مساحات العمل المؤرشفة",
+    "workspaceOptions": "خيارات مساحة العمل"
   },
   "workspace": {
     "backToDashboard": "العودة إلى لوحة التحكم",
