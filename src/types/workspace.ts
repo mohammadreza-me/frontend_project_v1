@@ -5,6 +5,7 @@ export interface Workspace {
   coverage: number;
   conceptCount: number;
   questionCount: number;
+  generatedQuestionCount: number;
   documentCount: number;
   createdAt: string;
 }

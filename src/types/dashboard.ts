@@ -1,5 +1,7 @@
 export interface DashboardStats {
   total_answers: number;
+  total_generated_questions: number;
+  total_practice_time_minutes: number;
   success_rate: number;
   daily_streak: number;
   documents_count: number;

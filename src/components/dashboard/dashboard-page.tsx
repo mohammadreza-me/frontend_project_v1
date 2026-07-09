@@ -1,6 +1,5 @@
 'use client';
 
-
 import { useState, useMemo } from 'react';
 import { useTranslation } from '@/lib/i18n/use-translation';
 import { useUIStore, useAuthStore } from '@/stores';
@@ -21,11 +20,19 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from '@/components/ui/tooltip';
+import {
   MessageSquare,
   TrendingUp,
   Target,
   LayoutGrid,
   Plus,
+  Clock,
+  HelpCircle,
 } from 'lucide-react';
 import type { Workspace } from '@/types';
 
@@ -46,24 +53,38 @@ const WEEKLY_MOCK_DATA = [
   { day: 'Sun', count: 10 },
 ];
 
-const MOCK_SUCCESS_RATE = 72.5;
-const MOCK_QUESTIONS_TODAY = 15;
+// Mock stats (would come from API in real app)
+const MOCK_STATS = {
+  totalPracticeTimeMinutes: 1245,
+  totalAnswers: 347,
+  successRate: 72.5,
+  questionsToday: 15,
+};
+
+function formatPracticeTime(minutes: number, t: ReturnType<typeof useTranslation>): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours >= 1) {
+    return `${hours}${t.dashboard.hours} ${mins}${t.dashboard.minutes}`;
+  }
+  return `${mins}${t.dashboard.minutes}`;
+}
 
 // ── Metric Card Skeleton ─────────────────────────────────────────────────────
 
 function MetricCardSkeleton() {
   return (
-    <Card className="p-4 gap-0">
-      <div className="flex items-center justify-between">
-        <Skeleton className="h-4 w-24" />
-        <Skeleton className="size-9 rounded-lg" />
+    <div className="flex items-center gap-3 rounded-lg border bg-card p-3">
+      <Skeleton className="size-8 shrink-0 rounded-lg" />
+      <div className="min-w-0 flex-1 space-y-1">
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-5 w-12" />
       </div>
-      <Skeleton className="mt-3 h-8 w-20" />
-    </Card>
+    </div>
   );
 }
 
-// ── Metric Card ──────────────────────────────────────────────────────────────
+// ── Metric Card (compact) ─────────────────────────────────────────────────────
 
 interface MetricCardProps {
   title: string;
@@ -75,15 +96,15 @@ interface MetricCardProps {
 
 function MetricCard({ title, value, icon, iconBg, iconColor }: MetricCardProps) {
   return (
-    <Card className="p-4 gap-0 transition-shadow hover:shadow-md">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-muted-foreground">{title}</span>
-        <div className={`flex size-9 items-center justify-center rounded-lg ${iconBg}`}>
-          <div className={iconColor}>{icon}</div>
-        </div>
+    <div className="flex items-center gap-3 rounded-lg border bg-card p-3 transition-shadow hover:shadow-md">
+      <div className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${iconBg}`}>
+        <div className={iconColor}>{icon}</div>
       </div>
-      <p className="mt-2 text-2xl font-bold tracking-tight">{value}</p>
-    </Card>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-medium text-muted-foreground">{title}</p>
+        <p className="text-lg font-bold tracking-tight">{value}</p>
+      </div>
+    </div>
   );
 }
 
@@ -126,8 +147,9 @@ function WorkspaceCard({
   conceptsLabel,
   documentsLabel,
   coverageLabel,
+  coverageInfoLabel,
   onClick,
-}: WorkspaceCardProps) {
+}: WorkspaceCardProps & { coverageInfoLabel?: string }) {
   return (
     <button
       type="button"
@@ -146,7 +168,7 @@ function WorkspaceCard({
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-base font-bold">{ws.name}</h3>
 
-          {/* Mini coverage bar */}
+          {/* Mini coverage bar with tooltip */}
           <div className="mt-3 flex items-center gap-2">
             <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted/50">
               <div
@@ -154,9 +176,22 @@ function WorkspaceCard({
                 style={{ width: `${ws.coverage}%` }}
               />
             </div>
-            <span className="text-xs font-medium text-muted-foreground">
-              {ws.coverage}% {coverageLabel}
-            </span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="flex items-center gap-0.5 text-xs font-medium text-muted-foreground cursor-help">
+                    {ws.coverage}% {coverageLabel}
+                    <HelpCircle className="size-3 opacity-50" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  <p>{coverageInfoLabel ?? 'Coverage = Answered / Generated'}</p>
+                  <p className="text-muted-foreground">
+                    {ws.questionCount} / {ws.generatedQuestionCount} questions
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
       </div>
@@ -248,8 +283,6 @@ export function DashboardPage() {
     return workspaces.reduce((sum, ws) => sum + ws.questionCount, 0);
   }, [workspaces]);
 
-  const activeWorkspacesCount = workspaces?.length ?? 0;
-
   const handleCreate = () => {
     if (!workspaceName.trim()) return;
     createWorkspace.mutate(
@@ -279,9 +312,9 @@ export function DashboardPage() {
         </h1>
       </header>
 
-      {/* ── Stats Row ───────────────────────────────────────────────────── */}
+      {/* ── Stats Row (4-column grid, compact) ──────────────────────────── */}
       <section
-        className="grid grid-cols-2 gap-4"
+        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
         aria-label={t.dashboard.title}
       >
         {isLoading ? (
@@ -294,30 +327,30 @@ export function DashboardPage() {
         ) : (
           <>
             <MetricCard
-              title={t.dashboard.totalAnswers}
+              title={t.dashboard.totalPracticeTime}
+              value={formatPracticeTime(MOCK_STATS.totalPracticeTimeMinutes, t)}
+              icon={<Clock className="size-4" />}
+              iconBg="bg-emerald-100 dark:bg-emerald-900/30"
+              iconColor="text-emerald-600 dark:text-emerald-400"
+            />
+            <MetricCard
+              title={t.dashboard.answeredQuestions}
               value={totalAnswers.toLocaleString()}
-              icon={<MessageSquare className="size-5" />}
+              icon={<MessageSquare className="size-4" />}
               iconBg="bg-emerald-100 dark:bg-emerald-900/30"
               iconColor="text-emerald-600 dark:text-emerald-400"
             />
             <MetricCard
               title={t.dashboard.successRate}
-              value={`${MOCK_SUCCESS_RATE}%`}
-              icon={<TrendingUp className="size-5" />}
-              iconBg="bg-emerald-100 dark:bg-emerald-900/30"
-              iconColor="text-emerald-600 dark:text-emerald-400"
-            />
-            <MetricCard
-              title={t.dashboard.activeWorkspaces}
-              value={String(activeWorkspacesCount)}
-              icon={<LayoutGrid className="size-5" />}
+              value={`${MOCK_STATS.successRate}%`}
+              icon={<TrendingUp className="size-4" />}
               iconBg="bg-emerald-100 dark:bg-emerald-900/30"
               iconColor="text-emerald-600 dark:text-emerald-400"
             />
             <MetricCard
               title={t.dashboard.questionsToday}
-              value={String(MOCK_QUESTIONS_TODAY)}
-              icon={<Target className="size-5" />}
+              value={String(MOCK_STATS.questionsToday)}
+              icon={<Target className="size-4" />}
               iconBg="bg-amber-100 dark:bg-amber-900/30"
               iconColor="text-amber-600 dark:text-amber-400"
             />
@@ -423,6 +456,7 @@ export function DashboardPage() {
                 conceptsLabel={t.dashboard.concepts}
                 documentsLabel={t.dashboard.documents}
                 coverageLabel={t.dashboard.coverage}
+                coverageInfoLabel={t.dashboard.coverageInfo}
                 onClick={() =>
                   navigate('workspace', { workspaceId: ws.id })
                 }

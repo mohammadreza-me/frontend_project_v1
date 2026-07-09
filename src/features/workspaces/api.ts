@@ -5,10 +5,10 @@ function delay(ms: number = 400): Promise<void> {
 }
 
 const mockWorkspaces: Workspace[] = [
-  { id: 'ws-1', name: 'Mathematics', icon: '📐', coverage: 72, conceptCount: 8, questionCount: 45, documentCount: 3, createdAt: '2024-11-15T10:00:00Z' },
-  { id: 'ws-2', name: 'Computer Networks', icon: '🌐', coverage: 58, conceptCount: 6, questionCount: 32, documentCount: 2, createdAt: '2024-12-01T08:30:00Z' },
-  { id: 'ws-3', name: 'Databases', icon: '🗃️', coverage: 85, conceptCount: 5, questionCount: 38, documentCount: 2, createdAt: '2024-12-10T14:00:00Z' },
-  { id: 'ws-4', name: 'Machine Learning', icon: '🤖', coverage: 35, conceptCount: 7, questionCount: 20, documentCount: 1, createdAt: '2025-01-05T09:00:00Z' },
+  { id: 'ws-1', name: 'Mathematics', icon: '📐', coverage: 72, conceptCount: 8, questionCount: 45, generatedQuestionCount: 62, documentCount: 3, createdAt: '2024-11-15T10:00:00Z' },
+  { id: 'ws-2', name: 'Computer Networks', icon: '🌐', coverage: 58, conceptCount: 6, questionCount: 32, generatedQuestionCount: 55, documentCount: 2, createdAt: '2024-12-01T08:30:00Z' },
+  { id: 'ws-3', name: 'Databases', icon: '🗃️', coverage: 85, conceptCount: 5, questionCount: 38, generatedQuestionCount: 45, documentCount: 2, createdAt: '2024-12-10T14:00:00Z' },
+  { id: 'ws-4', name: 'Machine Learning', icon: '🤖', coverage: 35, conceptCount: 7, questionCount: 20, generatedQuestionCount: 58, documentCount: 1, createdAt: '2025-01-05T09:00:00Z' },
 ];
 
 export async function getWorkspacesApi(): Promise<Workspace[]> {
@@ -25,6 +25,7 @@ export async function createWorkspaceApi(data: CreateWorkspaceRequest): Promise<
     coverage: 0,
     conceptCount: 0,
     questionCount: 0,
+    generatedQuestionCount: 0,
     documentCount: 0,
     createdAt: new Date().toISOString(),
   };

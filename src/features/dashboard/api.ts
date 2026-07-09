@@ -12,6 +12,8 @@ export async function getDashboardStatsApi(): Promise<DashboardStats> {
   await delay();
   return {
     total_answers: 347,
+    total_generated_questions: 520,
+    total_practice_time_minutes: 1245,
     success_rate: 72.5,
     daily_streak: 12,
     documents_count: 5,
