@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Locale, AppPage, ByokSettings, ByokScope, User } from '@/types';
+import type { Locale, AppPage, ByokSettings, ByokScope, User, WorkspaceTab } from '@/types';
 
 interface AuthState {
   user: User | null;
@@ -25,16 +25,26 @@ interface UIState {
   navigate: (page: AppPage, params?: Record<string, string>) => void;
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
+  selectedWorkspaceId: string | null;
+  setSelectedWorkspaceId: (id: string | null) => void;
+  workspaceTab: WorkspaceTab;
+  setWorkspaceTab: (tab: WorkspaceTab) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
-  locale: 'fa',
+  locale: 'en',
   setLocale: (locale) => set({ locale }),
   currentPage: 'login',
   pageParams: {},
-  navigate: (page, params = {}) => set({ currentPage: page, pageParams: params }),
+  navigate: (page, params = {}) => {
+    set({ currentPage: page, pageParams: params });
+  },
   sidebarOpen: false,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
+  selectedWorkspaceId: null,
+  setSelectedWorkspaceId: (id) => set({ selectedWorkspaceId: id }),
+  workspaceTab: 'status',
+  setWorkspaceTab: (tab) => set({ workspaceTab: tab }),
 }));
 
 interface ByokState {

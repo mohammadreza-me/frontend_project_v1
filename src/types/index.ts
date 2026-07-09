@@ -11,7 +11,12 @@ export type {
   ExamResult,
   ExamAnswerResult,
 } from './question';
-export type { SkillGraphData, SkillNode, SkillEdge, ConceptDetail } from './skill-graph';
+export type {
+  SkillGraphData,
+  SkillNode,
+  SkillEdge,
+  ConceptDetail,
+} from './knowledge-graph';
 export type {
   CareerOption,
   CareerSimulationRequest,
@@ -20,16 +25,27 @@ export type {
   CareerStage,
 } from './career';
 export type { DashboardStats, RecentActivity, WeakConcept } from './dashboard';
+export type {
+  Workspace,
+  WorkspaceStats,
+  CoverageInfo,
+  WorkspaceTag,
+  WorkspaceTab,
+  CreateWorkspaceRequest,
+  DocumentWithWorkspace,
+  KnowledgeGraphConcept,
+  ConceptTreeNode,
+  ConceptQuestionHistory,
+} from './workspace';
 
 export type AppPage =
   | 'login'
   | 'register'
   | 'dashboard'
-  | 'documents'
-  | 'document-detail'
+  | 'workspace'
   | 'practice'
   | 'exam'
-  | 'skill-graph'
+  | 'knowledge-graph'
   | 'career-simulation'
   | 'settings';
 

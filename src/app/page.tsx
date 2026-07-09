@@ -7,14 +7,14 @@ import { Footer } from '@/components/shared/footer';
 import { LoginForm } from '@/components/auth/login-form';
 import { RegisterForm } from '@/components/auth/register-form';
 import { DashboardPage } from '@/components/dashboard/dashboard-page';
+import { WorkspacePage } from '@/components/workspaces/workspace-page';
 import QuestionPage from '@/components/question/question-page';
-import { CareerPage } from '@/components/career/career-page';
 import { SettingsPage } from '@/components/settings/settings-page';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// Only lazy-load the heaviest component (ReactFlow)
-const SkillGraphPage = dynamic(
-  () => import('@/components/graph/skill-graph-page').then(m => ({ default: m.SkillGraphPage })),
+// Lazy-load the heaviest component (ReactFlow)
+const KnowledgeGraphPage = dynamic(
+  () => import('@/components/graph/knowledge-graph-page').then(m => ({ default: m.KnowledgeGraphPage })),
   {
     loading: () => (
       <div className="p-6 space-y-4">
@@ -53,16 +53,14 @@ function AppContent() {
 function PageRouter({ page }: { page: string }) {
   switch (page) {
     case 'dashboard':
-    case 'documents':
-    case 'document-detail':
       return <DashboardPage />;
+    case 'workspace':
+      return <WorkspacePage />;
     case 'practice':
     case 'exam':
       return <QuestionPage />;
-    case 'skill-graph':
-      return <SkillGraphPage />;
-    case 'career-simulation':
-      return <CareerPage />;
+    case 'knowledge-graph':
+      return <KnowledgeGraphPage />;
     case 'settings':
       return <SettingsPage />;
     default:

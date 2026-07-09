@@ -6,10 +6,11 @@ export interface SkillGraphData {
 export interface SkillNode {
   id: string;
   label: string;
-  type: 'domain' | 'concept' | 'question';
+  type: 'user' | 'workspace' | 'concept' | 'question';
   mastery?: number;
   question_count?: number;
   success_rate?: number;
+  workspaceId?: string;
 }
 
 export interface SkillEdge {

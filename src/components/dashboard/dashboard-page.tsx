@@ -1,57 +1,63 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
-import { useDropzone } from 'react-dropzone';
-import { formatDistanceToNow } from 'date-fns';
+import { useState, useMemo } from 'react';
+import { useTranslation } from '@/lib/i18n/use-translation';
+import { useUIStore, useAuthStore } from '@/stores';
+import { useWorkspaces, useCreateWorkspace } from '@/features/workspaces/hooks';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import {
   MessageSquare,
   TrendingUp,
-  Flame,
   Target,
-  Upload,
-  CheckCircle,
-  XCircle,
-  FileText,
+  LayoutGrid,
+  Plus,
 } from 'lucide-react';
+import type { Workspace } from '@/types';
 
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useTranslation } from '@/lib/i18n/use-translation';
-import { useUIStore, useAuthStore } from '@/stores';
-import { useDashboardData } from '@/hooks/use-dashboard-data';
-import { uploadDocumentApi } from '@/features/documents/api';
-import { useToast } from '@/hooks/use-toast';
-import type { Document as DocType } from '@/types';
+// ── Constants ────────────────────────────────────────────────────────────────
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+const EMOJI_OPTIONS = [
+  '📐', '🌐', '🗃️', '🤖', '🧬', '💻',
+  '📊', '🔬', '🎵', '📚', '⚡', '🌍',
+];
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+const WEEKLY_MOCK_DATA = [
+  { day: 'Mon', count: 12 },
+  { day: 'Tue', count: 19 },
+  { day: 'Wed', count: 8 },
+  { day: 'Thu', count: 25 },
+  { day: 'Fri', count: 15 },
+  { day: 'Sat', count: 22 },
+  { day: 'Sun', count: 10 },
+];
 
-function getMasteryColor(mastery: number): string {
-  if (mastery < 40) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
-  return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
-}
+const MOCK_SUCCESS_RATE = 72.5;
+const MOCK_QUESTIONS_TODAY = 15;
 
 // ── Metric Card Skeleton ─────────────────────────────────────────────────────
 
 function MetricCardSkeleton() {
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-5 w-24" />
-          <Skeleton className="size-9 rounded-lg" />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <Skeleton className="h-8 w-20" />
-      </CardContent>
+    <Card className="p-4 gap-0">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="size-9 rounded-lg" />
+      </div>
+      <Skeleton className="mt-3 h-8 w-20" />
     </Card>
   );
 }
@@ -64,263 +70,157 @@ interface MetricCardProps {
   icon: React.ReactNode;
   iconBg: string;
   iconColor: string;
-  isLoading: boolean;
 }
 
-function MetricCard({ title, value, icon, iconBg, iconColor, isLoading }: MetricCardProps) {
-  if (isLoading) return <MetricCardSkeleton />;
-
+function MetricCard({ title, value, icon, iconBg, iconColor }: MetricCardProps) {
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            {title}
-          </CardTitle>
-          <div className={`flex size-9 items-center justify-center rounded-lg ${iconBg}`}>
-            <div className={iconColor}>{icon}</div>
-          </div>
+    <Card className="p-4 gap-0 transition-shadow hover:shadow-md">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-muted-foreground">{title}</span>
+        <div className={`flex size-9 items-center justify-center rounded-lg ${iconBg}`}>
+          <div className={iconColor}>{icon}</div>
         </div>
-      </CardHeader>
-      <CardContent>
-        <p className="text-2xl font-bold tracking-tight">{value}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ── Chart Skeleton ───────────────────────────────────────────────────────────
-
-function ChartSkeleton() {
-  return (
-    <Card>
-      <CardHeader>
-        <Skeleton className="h-6 w-36" />
-      </CardHeader>
-      <CardContent>
-        <Skeleton className="h-64 w-full rounded-lg" />
-      </CardContent>
-    </Card>
-  );
-}
-
-// ── Weekly Activity Chart ────────────────────────────────────────────────────
-
-interface WeeklyActivityChartProps {
-  data: { day: string; count: number }[] | undefined;
-  isLoading: boolean;
-  title: string;
-  subtitle: string;
-  yAxisLabel: string;
-}
-
-function WeeklyActivityChart({ data, isLoading, title, subtitle, yAxisLabel }: WeeklyActivityChartProps) {
-  if (isLoading) return <ChartSkeleton />;
-  const maxCount = Math.max(...(data?.map(d => d.count) ?? [1]));
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>{title}</CardTitle>
-          <Badge variant="secondary" className="text-xs">{subtitle}</Badge>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
-          {data?.map((item) => (
-            <div key={item.day} className="flex items-center gap-3">
-              <span className="w-8 text-xs text-muted-foreground text-end shrink-0">{item.day}</span>
-              <div className="flex-1 h-8 rounded-md bg-muted/50 overflow-hidden">
-                <div
-                  className="h-full rounded-md bg-emerald-500 transition-all duration-500"
-                  style={{ width: `${(item.count / maxCount) * 100}%`, minWidth: item.count > 0 ? '8px' : '0px' }}
-                />
-              </div>
-              <span className="w-6 text-xs font-medium text-end">{item.count}</span>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ── Subject Distribution Pie Chart ───────────────────────────────────────────
-
-interface SubjectDistributionChartProps {
-  data: { name: string; value: number; color: string }[] | undefined;
-  isLoading: boolean;
-  title: string;
-}
-
-function SubjectDistributionChart({ data, isLoading, title }: SubjectDistributionChartProps) {
-  if (isLoading) return <ChartSkeleton />;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {data?.map((item) => (
-          <div key={item.name} className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="size-3 rounded-full" style={{ backgroundColor: item.color }} />
-                <span className="text-sm">{item.name}</span>
-              </div>
-              <span className="text-sm font-medium">{item.value}%</span>
-            </div>
-            <div className="h-2 rounded-full bg-muted/50 overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{ width: `${item.value}%`, backgroundColor: item.color }}
-              />
-            </div>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-// ── Document Upload Zone ─────────────────────────────────────────────────────
-
-interface UploadZoneProps {
-  onUpload: (file: File) => void;
-  isUploading: boolean;
-  dragDropText: string;
-  browseFilesText: string;
-  supportedFormatsText: string;
-}
-
-function UploadZone({
-  onUpload,
-  isUploading,
-  dragDropText,
-  browseFilesText,
-  supportedFormatsText,
-}: UploadZoneProps) {
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: (acceptedFiles) => {
-      if (acceptedFiles.length > 0) {
-        onUpload(acceptedFiles[0]);
-      }
-    },
-    accept: {
-      'application/pdf': ['.pdf'],
-      'text/plain': ['.txt'],
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-    },
-    maxFiles: 1,
-    disabled: isUploading,
-  });
-
-  return (
-    <div
-      {...getRootProps()}
-      className={`
-        flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed
-        p-6 transition-colors
-        ${isDragActive ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20' : 'border-muted-foreground/25 hover:border-emerald-400 hover:bg-muted/50'}
-        ${isUploading ? 'pointer-events-none opacity-60' : ''}
-      `}
-    >
-      <input {...getInputProps()} />
-      <div className="flex size-10 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-        <Upload className="size-5 text-emerald-600 dark:text-emerald-400" />
       </div>
-      <p className="text-sm text-muted-foreground">{dragDropText}</p>
-      <Button type="button" variant="outline" size="sm" disabled={isUploading}>
-        {isUploading ? '...' : browseFilesText}
-      </Button>
-      <p className="text-xs text-muted-foreground/70">{supportedFormatsText}</p>
+      <p className="mt-2 text-2xl font-bold tracking-tight">{value}</p>
+    </Card>
+  );
+}
+
+// ── Workspace Card Skeleton ──────────────────────────────────────────────────
+
+function WorkspaceCardSkeleton() {
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="flex items-start gap-3">
+        <Skeleton className="size-12 shrink-0 rounded-xl" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-2 w-full" />
+          <Skeleton className="h-3 w-12" />
+        </div>
+      </div>
+      <div className="mt-4 flex gap-3">
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-4 w-16" />
+        <Skeleton className="h-4 w-14" />
+      </div>
     </div>
   );
 }
 
-// ── Document Row ─────────────────────────────────────────────────────────────
+// ── Workspace Card ───────────────────────────────────────────────────────────
 
-interface DocumentRowProps {
-  doc: DocType;
-  t: ReturnType<typeof useTranslation>;
+interface WorkspaceCardProps {
+  ws: Workspace;
+  questionsLabel: string;
+  conceptsLabel: string;
+  documentsLabel: string;
+  coverageLabel: string;
   onClick: () => void;
 }
 
-function DocumentRow({ doc, t, onClick }: DocumentRowProps) {
+function WorkspaceCard({
+  ws,
+  questionsLabel,
+  conceptsLabel,
+  documentsLabel,
+  coverageLabel,
+  onClick,
+}: WorkspaceCardProps) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-lg border p-3 text-start transition-colors hover:bg-muted/50"
+      className="group rounded-xl border bg-card p-4 text-start transition-all duration-200 hover:border-emerald-300 hover:shadow-md"
     >
-      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-        <FileText className="size-5 text-emerald-600 dark:text-emerald-400" />
+      {/* Icon + Name + Coverage */}
+      <div className="flex items-start gap-3">
+        <span
+          className="shrink-0 text-5xl leading-none"
+          role="img"
+          aria-label={ws.name}
+        >
+          {ws.icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-base font-bold">{ws.name}</h3>
+
+          {/* Mini coverage bar */}
+          <div className="mt-3 flex items-center gap-2">
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted/50">
+              <div
+                className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                style={{ width: `${ws.coverage}%` }}
+              />
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              {ws.coverage}% {coverageLabel}
+            </span>
+          </div>
+        </div>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-sm font-medium">{doc.filename}</span>
-        <span className="text-xs text-muted-foreground">
-          {formatFileSize(doc.file_size)} · {formatDistanceToNow(new Date(doc.uploaded_at), { addSuffix: true })}
+      {/* Stats row */}
+      <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+        <span>
+          {ws.questionCount} {questionsLabel}
+        </span>
+        <span className="text-muted-foreground/40">·</span>
+        <span>
+          {ws.conceptCount} {conceptsLabel}
+        </span>
+        <span className="text-muted-foreground/40">·</span>
+        <span>
+          {ws.documentCount} {documentsLabel}
         </span>
       </div>
-
-      <Badge
-        variant="outline"
-        className={
-          doc.status === 'ready'
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
-            : 'border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 animate-pulse'
-        }
-      >
-        {doc.status === 'ready' ? t.dashboard.ready : t.dashboard.processing}
-      </Badge>
     </button>
   );
 }
 
-// ── Activity Row ─────────────────────────────────────────────────────────────
+// ── Weekly Activity Chart (CSS-only) ────────────────────────────────────────
 
-interface ActivityRowProps {
-  item: {
-    id: string;
-    question_text: string;
-    concept_name: string;
-    correct: boolean;
-    answered_at: string;
-    mode: 'practice' | 'exam';
-  };
-  t: ReturnType<typeof useTranslation>;
+interface WeeklyChartProps {
+  data: { day: string; count: number }[];
+  title: string;
+  subtitle: string;
 }
 
-function ActivityRow({ item, t }: ActivityRowProps) {
-  return (
-    <div className="flex items-start gap-3 py-3">
-      <div className="mt-0.5 shrink-0">
-        {item.correct ? (
-          <CheckCircle className="size-5 text-emerald-500" />
-        ) : (
-          <XCircle className="size-5 text-red-500" />
-        )}
-      </div>
+function WeeklyActivityChart({ data, title, subtitle }: WeeklyChartProps) {
+  const maxCount = Math.max(...data.map((d) => d.count), 1);
 
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <p className="truncate text-sm">{item.question_text}</p>
-        <div className="flex items-center gap-2">
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base font-semibold">{title}</CardTitle>
           <Badge variant="secondary" className="text-xs">
-            {item.concept_name}
-          </Badge>
-          <Badge variant="outline" className="text-xs">
-            {item.mode}
+            {subtitle}
           </Badge>
         </div>
-      </div>
-
-      <span className="shrink-0 text-xs text-muted-foreground">
-        {formatDistanceToNow(new Date(item.answered_at), { addSuffix: true })}
-      </span>
-    </div>
+      </CardHeader>
+      <CardContent className="space-y-2.5">
+        {data.map((item) => (
+          <div key={item.day} className="flex items-center gap-3">
+            <span className="w-8 shrink-0 text-xs text-muted-foreground text-end font-medium">
+              {item.day}
+            </span>
+            <div className="h-7 flex-1 overflow-hidden rounded-md bg-muted/50">
+              <div
+                className="h-full rounded-md bg-emerald-500 transition-all duration-700 ease-out"
+                style={{
+                  width: `${(item.count / maxCount) * 100}%`,
+                  minWidth: item.count > 0 ? '8px' : '0px',
+                }}
+              />
+            </div>
+            <span className="w-6 shrink-0 text-xs font-semibold text-end tabular-nums">
+              {item.count}
+            </span>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -330,230 +230,239 @@ export function DashboardPage() {
   const t = useTranslation();
   const navigate = useUIStore((s) => s.navigate);
   const user = useAuthStore((s) => s.user);
-  const { toast } = useToast();
 
-  const { stats, activity, weakConcepts, documents, weeklyActivity, subjectDistribution } = useDashboardData();
+  const { data: workspaces, isLoading } = useWorkspaces();
+  const createWorkspace = useCreateWorkspace();
 
-  const uploadMutation = useMutation({
-    mutationFn: uploadDocumentApi,
-    onSuccess: () => {
-      toast({
-        title: t.dashboard.uploadDocument,
-        description: t.common.success,
-      });
-      documents.refetch();
-    },
-    onError: () => {
-      toast({
-        title: t.common.error,
-        description: t.common.retry,
-        variant: 'destructive',
-      });
-    },
-  });
+  // Dialog state
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState('');
+  const [selectedEmoji, setSelectedEmoji] = useState('📐');
 
   const userName = user?.name ?? '';
 
+  // Computed stats from workspace data
+  const totalAnswers = useMemo(() => {
+    if (!workspaces) return 0;
+    return workspaces.reduce((sum, ws) => sum + ws.questionCount, 0);
+  }, [workspaces]);
+
+  const activeWorkspacesCount = workspaces?.length ?? 0;
+
+  const handleCreate = () => {
+    if (!workspaceName.trim()) return;
+    createWorkspace.mutate(
+      { name: workspaceName.trim(), icon: selectedEmoji },
+      {
+        onSuccess: () => {
+          setDialogOpen(false);
+          setWorkspaceName('');
+          setSelectedEmoji('📐');
+        },
+      },
+    );
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && workspaceName.trim() && !createWorkspace.isPending) {
+      handleCreate();
+    }
+  };
+
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      {/* Welcome Message */}
-      <div>
+    <div className="space-y-6 p-4 md:p-6 lg:p-8">
+      {/* ── Welcome Bar ─────────────────────────────────────────────────── */}
+      <header>
         <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
-          {t.dashboard.welcomeBack} {userName} 👋
+          {t.dashboard.welcomeBack}, {userName} 👋
         </h1>
-      </div>
+      </header>
 
-      {/* Top Row — 4 Metric Cards */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          title={t.dashboard.totalAnswers}
-          value={stats.data?.total_answers?.toLocaleString() ?? '0'}
-          icon={<MessageSquare className="size-5" />}
-          iconBg="bg-emerald-100 dark:bg-emerald-900/30"
-          iconColor="text-emerald-600 dark:text-emerald-400"
-          isLoading={stats.isLoading}
-        />
+      {/* ── Stats Row ───────────────────────────────────────────────────── */}
+      <section
+        className="grid grid-cols-2 gap-4"
+        aria-label={t.dashboard.title}
+      >
+        {isLoading ? (
+          <>
+            <MetricCardSkeleton />
+            <MetricCardSkeleton />
+            <MetricCardSkeleton />
+            <MetricCardSkeleton />
+          </>
+        ) : (
+          <>
+            <MetricCard
+              title={t.dashboard.totalAnswers}
+              value={totalAnswers.toLocaleString()}
+              icon={<MessageSquare className="size-5" />}
+              iconBg="bg-emerald-100 dark:bg-emerald-900/30"
+              iconColor="text-emerald-600 dark:text-emerald-400"
+            />
+            <MetricCard
+              title={t.dashboard.successRate}
+              value={`${MOCK_SUCCESS_RATE}%`}
+              icon={<TrendingUp className="size-5" />}
+              iconBg="bg-emerald-100 dark:bg-emerald-900/30"
+              iconColor="text-emerald-600 dark:text-emerald-400"
+            />
+            <MetricCard
+              title={t.dashboard.activeWorkspaces}
+              value={String(activeWorkspacesCount)}
+              icon={<LayoutGrid className="size-5" />}
+              iconBg="bg-emerald-100 dark:bg-emerald-900/30"
+              iconColor="text-emerald-600 dark:text-emerald-400"
+            />
+            <MetricCard
+              title={t.dashboard.questionsToday}
+              value={String(MOCK_QUESTIONS_TODAY)}
+              icon={<Target className="size-5" />}
+              iconBg="bg-amber-100 dark:bg-amber-900/30"
+              iconColor="text-amber-600 dark:text-amber-400"
+            />
+          </>
+        )}
+      </section>
 
-        <MetricCard
-          title={t.dashboard.successRate}
-          value={stats.data ? `${stats.data.success_rate}%` : '0%'}
-          icon={<TrendingUp className="size-5" />}
-          iconBg="bg-emerald-100 dark:bg-emerald-900/30"
-          iconColor="text-emerald-600 dark:text-emerald-400"
-          isLoading={stats.isLoading}
-        />
+      {/* ── Workspaces Section ──────────────────────────────────────────── */}
+      <section aria-label={t.dashboard.activeWorkspaces}>
+        {/* Header row with title + create button */}
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">{t.dashboard.activeWorkspaces}</h2>
 
-        <MetricCard
-          title={t.dashboard.dailyStreak}
-          value={stats.data ? `${stats.data.daily_streak} ${t.dashboard.days}` : `0 ${t.dashboard.days}`}
-          icon={<Flame className="size-5" />}
-          iconBg="bg-amber-100 dark:bg-amber-900/30"
-          iconColor="text-amber-600 dark:text-amber-400"
-          isLoading={stats.isLoading}
-        />
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                size="sm"
+                className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
+              >
+                <Plus className="size-4" />
+                {t.dashboard.newWorkspace}
+              </Button>
+            </DialogTrigger>
 
-        <MetricCard
-          title={t.dashboard.questionsToday}
-          value={stats.data?.questions_today?.toLocaleString() ?? '0'}
-          icon={<Target className="size-5" />}
-          iconBg="bg-emerald-100 dark:bg-emerald-900/30"
-          iconColor="text-emerald-600 dark:text-emerald-400"
-          isLoading={stats.isLoading}
-        />
-      </div>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{t.dashboard.newWorkspace}</DialogTitle>
+                <DialogDescription>
+                  {t.dashboard.createFirst}
+                </DialogDescription>
+              </DialogHeader>
 
-      {/* Charts Row — Weekly Activity + Subject Distribution */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="space-y-5 py-2">
+                {/* Name input */}
+                <div className="space-y-2">
+                  <Label htmlFor="ws-name-input">
+                    {t.dashboard.workspaceName}
+                  </Label>
+                  <Input
+                    id="ws-name-input"
+                    value={workspaceName}
+                    onChange={(e) => setWorkspaceName(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={t.dashboard.workspaceNamePlaceholder}
+                    autoFocus
+                  />
+                </div>
+
+                {/* Emoji icon picker */}
+                <div className="space-y-2">
+                  <Label>{t.dashboard.workspaceIcon}</Label>
+                  <div className="grid grid-cols-6 gap-2">
+                    {EMOJI_OPTIONS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => setSelectedEmoji(emoji)}
+                        className={[
+                          'flex size-11 items-center justify-center rounded-lg border-2 text-2xl transition-colors hover:bg-muted/50',
+                          selectedEmoji === emoji
+                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30'
+                            : 'border-transparent',
+                        ].join(' ')}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  onClick={handleCreate}
+                  disabled={
+                    !workspaceName.trim() || createWorkspace.isPending
+                  }
+                  className="bg-emerald-600 text-white hover:bg-emerald-700"
+                >
+                  {createWorkspace.isPending
+                    ? t.dashboard.creating
+                    : t.dashboard.create}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {/* Workspace cards grid */}
+        {isLoading ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <WorkspaceCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : workspaces && workspaces.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {workspaces.map((ws) => (
+              <WorkspaceCard
+                key={ws.id}
+                ws={ws}
+                questionsLabel={t.common.questions}
+                conceptsLabel={t.dashboard.concepts}
+                documentsLabel={t.dashboard.documents}
+                coverageLabel={t.dashboard.coverage}
+                onClick={() =>
+                  navigate('workspace', { workspaceId: ws.id })
+                }
+              />
+            ))}
+          </div>
+        ) : (
+          /* Empty state */
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-muted/50">
+                <LayoutGrid className="size-8 text-muted-foreground/40" />
+              </div>
+              <p className="text-base font-medium">
+                {t.dashboard.noWorkspaces}
+              </p>
+              <p className="mt-1.5 max-w-xs text-sm text-muted-foreground">
+                {t.dashboard.createFirst}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-5 gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+                onClick={() => setDialogOpen(true)}
+              >
+                <Plus className="size-4" />
+                {t.dashboard.newWorkspace}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </section>
+
+      {/* ── Weekly Activity ─────────────────────────────────────────────── */}
+      <section aria-label={t.dashboard.weeklyActivity}>
         <WeeklyActivityChart
-          data={weeklyActivity.data}
-          isLoading={weeklyActivity.isLoading}
+          data={WEEKLY_MOCK_DATA}
           title={t.dashboard.weeklyActivity}
           subtitle={t.dashboard.thisWeek}
-          yAxisLabel={t.dashboard.questions}
         />
-
-        <SubjectDistributionChart
-          data={subjectDistribution.data}
-          isLoading={subjectDistribution.isLoading}
-          title={t.dashboard.subjectDistribution}
-        />
-      </div>
-
-      {/* Documents Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t.dashboard.recentDocuments}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Upload Zone */}
-          <UploadZone
-            onUpload={(file) => uploadMutation.mutate(file)}
-            isUploading={uploadMutation.isPending}
-            dragDropText={t.dashboard.dragDrop}
-            browseFilesText={t.dashboard.browseFiles}
-            supportedFormatsText={t.dashboard.supportedFormats}
-          />
-
-          {/* Document List */}
-          {documents.isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3 rounded-lg border p-3">
-                  <Skeleton className="size-10 rounded-lg" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4 w-40" />
-                    <Skeleton className="h-3 w-28" />
-                  </div>
-                  <Skeleton className="h-6 w-16 rounded-full" />
-                </div>
-              ))}
-            </div>
-          ) : documents.data && documents.data.length > 0 ? (
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {documents.data.map((doc) => (
-                <DocumentRow
-                  key={doc.id}
-                  doc={doc}
-                  t={t}
-                  onClick={() => {
-                    toast({
-                      title: doc.title,
-                      description: t.dashboard.ready,
-                    });
-                  }}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <FileText className="mb-2 size-10 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">{t.dashboard.noDocuments}</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Bottom Row — Weak Concepts + Recent Activity */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Weak Concepts */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>{t.dashboard.weakConcepts}</CardTitle>
-              <Button
-                variant="link"
-                size="sm"
-                className="text-emerald-600 dark:text-emerald-400"
-                onClick={() => navigate('skill-graph')}
-              >
-                {t.dashboard.viewAll}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {weakConcepts.isLoading ? (
-              <div className="flex flex-wrap gap-2">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-8 w-28 rounded-full" />
-                ))}
-              </div>
-            ) : weakConcepts.data && weakConcepts.data.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {weakConcepts.data.slice(0, 3).map((concept) => (
-                  <button
-                    key={concept.id}
-                    type="button"
-                    onClick={() => navigate('skill-graph')}
-                    className={`
-                      inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium
-                      transition-colors hover:opacity-80
-                      ${getMasteryColor(concept.mastery)}
-                    `}
-                  >
-                    {concept.name}
-                    <span className="text-xs opacity-75">{concept.mastery}%</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">{t.common.noData}</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Recent Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle>{t.dashboard.recentActivity}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {activity.isLoading ? (
-              <div className="space-y-1">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="flex items-start gap-3 py-3">
-                    <Skeleton className="size-5 rounded-full" />
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-4 w-full" />
-                      <Skeleton className="h-5 w-24" />
-                    </div>
-                    <Skeleton className="h-3 w-16" />
-                  </div>
-                ))}
-              </div>
-            ) : activity.data && activity.data.length > 0 ? (
-              <div className="max-h-96 overflow-y-auto divide-y">
-                {activity.data.slice(0, 5).map((item) => (
-                  <ActivityRow key={item.id} item={item} t={t} />
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <p className="text-sm text-muted-foreground">{t.dashboard.noActivity}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      </section>
     </div>
   );
 }

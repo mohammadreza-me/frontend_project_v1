@@ -25,11 +25,7 @@ import type { AppPage, Locale } from '@/types';
 import { useTheme } from 'next-themes';
 import {
   LayoutDashboard,
-  FileText,
-  PenTool,
-  ClipboardList,
   GitBranch,
-  Briefcase,
   Settings,
   LogOut,
   Menu,
@@ -46,10 +42,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { page: 'dashboard', labelKey: 'dashboard', icon: LayoutDashboard },
-  { page: 'practice', labelKey: 'practice', icon: PenTool },
-  { page: 'exam', labelKey: 'exam', icon: ClipboardList },
-  { page: 'skill-graph', labelKey: 'skillGraph', icon: GitBranch },
-  { page: 'career-simulation', labelKey: 'careerSimulation', icon: Briefcase },
+  { page: 'knowledge-graph', labelKey: 'knowledgeGraph', icon: GitBranch },
   { page: 'settings', labelKey: 'settings', icon: Settings },
 ];
 
@@ -99,20 +92,17 @@ export function Header() {
     return (
       <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-14 items-center justify-between px-4">
-          {/* App name */}
           <span className="text-lg font-bold text-emerald-700 dark:text-emerald-400">
             {t.common.appName}
           </span>
 
           <div className="flex items-center gap-2">
-            {/* Dark mode toggle */}
             <Button variant="ghost" size="icon" className="size-8" onClick={toggleTheme}>
               <Sun className="size-4 scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
               <Moon className="absolute size-4 scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
               <span className="sr-only">Toggle theme</span>
             </Button>
 
-            {/* Language switcher */}
             <Select value={locale} onValueChange={handleLocaleChange}>
               <SelectTrigger size="sm" className="w-auto gap-1">
                 <Globe className="size-4" />
@@ -127,7 +117,6 @@ export function Header() {
               </SelectContent>
             </Select>
 
-            {/* Hamburger menu */}
             <Sheet>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon">
@@ -179,16 +168,14 @@ export function Header() {
     );
   }
 
-  // Desktop: full nav
+  // Desktop
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-14 items-center gap-4 px-6">
-        {/* App name */}
         <span className="text-lg font-bold text-emerald-700 dark:text-emerald-400 me-6">
           {t.common.appName}
         </span>
 
-        {/* Nav links */}
         <nav className="flex items-center gap-1 flex-1">
           {navItems.map(({ page, labelKey, icon: Icon }) => (
             <button
@@ -202,7 +189,6 @@ export function Header() {
           ))}
         </nav>
 
-        {/* Right side: theme + language + user */}
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" className="size-8" onClick={toggleTheme}>
             <Sun className="size-4 scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
