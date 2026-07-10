@@ -195,7 +195,12 @@
     "mediumMastery": "Medium Mastery (40-70%)",
     "lowMastery": "Low Mastery (<40%)",
     "userSummary": "You are active in {count} workspaces, covering {concepts} concepts total",
-    "loadingGraph": "Loading knowledge graph..."
+    "loadingGraph": "Loading knowledge graph...",
+    "masteryFilter": "Mastery Level",
+    "masteryAll": "All Levels",
+    "masteryLow": "Low (<=33%)",
+    "masteryMedium": "Medium (34-66%)",
+    "masteryHigh": "High (>66%)"
   },
   "career": {
     "title": "Career Path Simulation",

@@ -195,7 +195,12 @@
     "mediumMastery": "تسلط متوسط (۴۰-۷۰٪)",
     "lowMastery": "تسلط پایین (<۴۰٪)",
     "userSummary": "شما در {count} فضای کاری فعال هستید و مجموعاً {concepts} مفهوم را پوشش داده‌اید",
-    "loadingGraph": "در حال بارگذاری نقشه دانش..."
+    "loadingGraph": "در حال بارگذاری نقشه دانش...",
+    "masteryFilter": "سطح تسلط",
+    "masteryAll": "همه سطوح",
+    "masteryLow": "پایین (<=33٪)",
+    "masteryMedium": "متوسط (34-66٪)",
+    "masteryHigh": "بالا (>66٪)"
   },
   "career": {
     "title": "شبیه‌سازی مسیر شغلی",

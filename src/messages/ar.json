@@ -195,7 +195,12 @@
     "mediumMastery": "إتقان متوسط (40-70%)",
     "lowMastery": "إتقان منخفض (<40%)",
     "userSummary": "أنت نشط في {count} مساحات عمل، تغطي {concepts} مفهوم إجمالاً",
-    "loadingGraph": "جاري تحميل خريطة المعرفة..."
+    "loadingGraph": "جاري تحميل خريطة المعرفة...",
+    "masteryFilter": "مستوى الإتقان",
+    "masteryAll": "جميع المستويات",
+    "masteryLow": "منخفض (<=33%)",
+    "masteryMedium": "متوسط (34-66%)",
+    "masteryHigh": "عالٍ (>66%)"
   },
   "career": {
     "title": "محاكاة المسار المهني",

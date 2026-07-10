@@ -22,14 +22,14 @@ interface ConceptNodeData {
 }
 
 function getMasteryColor(mastery: number): string {
-  if (mastery > 70) return '#22c55e';
-  if (mastery >= 40) return '#eab308';
+  if (mastery > 66) return '#22c55e';
+  if (mastery > 33) return '#eab308';
   return '#ef4444';
 }
 
 function getMasteryBorderColor(mastery: number): string {
-  if (mastery > 70) return '#16a34a';
-  if (mastery >= 40) return '#ca8a04';
+  if (mastery > 66) return '#16a34a';
+  if (mastery > 33) return '#ca8a04';
   return '#dc2626';
 }
 
@@ -40,9 +40,10 @@ export function transformSkillGraphToReactFlow(
   const workspaceNodes = data.nodes.filter((n) => n.type === 'workspace');
   const conceptNodes = data.nodes.filter((n) => n.type === 'concept');
 
-  const centerX = 500;
-  const centerY = 350;
-  const workspaceRadius = 220;
+  const centerX = 600;
+  const centerY = 450;
+  // Spread workspaces further from center
+  const workspaceRadius = 320;
 
   const nodes: Node[] = [];
 
@@ -71,14 +72,30 @@ export function transformSkillGraphToReactFlow(
       draggable: true,
     });
 
-    // Concepts around each workspace
+    // Find concepts directly connected to this workspace via edges
     const relatedConcepts = conceptNodes.filter((c) =>
       data.edges.some((e) => e.source === ws.id && e.target === c.id)
     );
 
-    const conceptRadius = 120;
+    // Spread concepts further out from workspace
+    const conceptRadius = 160;
+    // Compute the arc range for this workspace's sector to avoid overlap between workspaces
+    const sectorAngle = (2 * Math.PI) / Math.max(workspaceNodes.length, 1);
+    // Fan concepts within that sector minus a small padding on each side
+    const fanPadding = 0.3;
+    const fanRange = Math.max(sectorAngle - fanPadding * 2, 0.4);
+
     relatedConcepts.forEach((concept, cIndex) => {
-      const spreadAngle = (2 * Math.PI * cIndex) / relatedConcepts.length + angle * 0.3;
+      let spreadAngle: number;
+      if (relatedConcepts.length === 1) {
+        // Single concept: place it directly outward from workspace
+        spreadAngle = angle;
+      } else {
+        // Fan concepts evenly within the workspace's sector
+        const t = cIndex / (relatedConcepts.length - 1);
+        spreadAngle = angle - fanRange / 2 + t * fanRange;
+      }
+
       const cx = x + conceptRadius * Math.cos(spreadAngle);
       const cy = y + conceptRadius * Math.sin(spreadAngle);
       const mastery = concept.mastery ?? 0;
@@ -106,7 +123,7 @@ export function transformSkillGraphToReactFlow(
     source: edge.source,
     target: edge.target,
     type: 'smoothstep',
-    style: { stroke: '#e2e8f0', strokeWidth: 2 },
+    style: { stroke: '#cbd5e1', strokeWidth: 1.5 },
     animated: false,
   }));
 
