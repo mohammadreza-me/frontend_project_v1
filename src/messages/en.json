@@ -246,7 +246,18 @@
     "darkModeDescription": "Toggle between light and dark theme",
     "about": "About",
     "version": "Version",
-    "builtWith": "Built with AI-Powered Adaptive Learning"
+    "builtWith": "Built with AI-Powered Adaptive Learning",
+    "username": "Username",
+    "usernamePlaceholder": "Enter your username",
+    "usernameSaved": "Username saved",
+    "savedKey": "Saved key",
+    "aiProvider": "AI Provider",
+    "appearance": "Appearance",
+    "appearanceDescription": "Theme and language preferences",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "builtWithLabel": "Built with"
   },
   "aiProcessing": {
     "uploading": "Uploading file...",

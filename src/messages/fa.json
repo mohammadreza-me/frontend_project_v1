@@ -246,7 +246,18 @@
     "darkModeDescription": "تغییر بین تم روشن و تاریک",
     "about": "درباره",
     "version": "نسخه",
-    "builtWith": "ساخته شده با یادگیری تطبیقی مبتنی بر هوش مصنوعی"
+    "builtWith": "ساخته شده با یادگیری تطبیقی مبتنی بر هوش مصنوعی",
+    "username": "نام کاربری",
+    "usernamePlaceholder": "نام کاربری خود را وارد کنید",
+    "usernameSaved": "نام کاربری ذخیره شد",
+    "savedKey": "کلید ذخیره شده",
+    "aiProvider": "ارائه دهنده هوش مصنوعی",
+    "appearance": "ظاهر",
+    "appearanceDescription": "تنظیمات پوسته و زبان",
+    "themeLight": "روشن",
+    "themeDark": "تاریک",
+    "themeSystem": "سیستم",
+    "builtWithLabel": "ساخته شده با"
   },
   "aiProcessing": {
     "uploading": "در حال آپلود فایل...",

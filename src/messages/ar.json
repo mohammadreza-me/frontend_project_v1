@@ -246,7 +246,18 @@
     "darkModeDescription": "التبديل بين السمة الفاتحة والداكنة",
     "about": "حول",
     "version": "الإصدار",
-    "builtWith": "مبني على التعلم التكيفي بالذكاء الاصطناعي"
+    "builtWith": "مبني على التعلم التكيفي بالذكاء الاصطناعي",
+    "username": "اسم المستخدم",
+    "usernamePlaceholder": "أدخل اسم المستخدم",
+    "usernameSaved": "تم حفظ اسم المستخدم",
+    "savedKey": "المفتاح المحفوظ",
+    "aiProvider": "مزود الذكاء الاصطناعي",
+    "appearance": "المظهر",
+    "appearanceDescription": "تفضيلات السمة واللغة",
+    "themeLight": "فاتح",
+    "themeDark": "داكن",
+    "themeSystem": "النظام",
+    "builtWithLabel": "مبني بـ"
   },
   "aiProcessing": {
     "uploading": "جاري رفع الملف...",
