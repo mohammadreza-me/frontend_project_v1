@@ -93,7 +93,7 @@ export function transformSkillGraphToReactFlow(
       } else {
         // Fan concepts evenly within the workspace's sector
         const t = cIndex / (relatedConcepts.length - 1);
-        spreadAngle = angle - fanRange / 2 + t * fanRange;
+        spreadAngle = angle - fanRange / 2 + ratio * fanRange;
       }
 
       const cx = x + conceptRadius * Math.cos(spreadAngle);
