@@ -306,14 +306,7 @@ function KnowledgeGraphInner() {
     return transformSkillGraphToReactFlow(filteredGraphData);
   }, [filteredGraphData]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  // Sync transformed data into React Flow state whenever filters or data change
-  useEffect(() => {
-    setNodes(transformed.nodes);
-    setEdges(transformed.edges);
-  }, [transformed, setNodes, setEdges]);
 
   const selectedNode = useMemo(() => {
     if (!conceptId || !rawGraphData) return null;
@@ -497,9 +490,9 @@ function KnowledgeGraphInner() {
 
         {/* React Flow */}
         <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
+          nodes={transformed.nodes} // مستقیماً از متغیر memoized استفاده کنید
+          edges={transformed.edges} // مستقیماً از متغیر memoized استفاده کنید
+          onNodesChange={onNodesChange} // این‌ها را هم اگر نیاز به جابجایی نودها ندارید می‌توانید حذف کنید
           onEdgesChange={onEdgesChange}
           onNodeClick={onNodeClick}
           onPaneClick={onPaneClick}
