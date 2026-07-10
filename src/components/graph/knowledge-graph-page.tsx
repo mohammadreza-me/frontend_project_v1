@@ -306,14 +306,11 @@ function KnowledgeGraphInner() {
     return transformSkillGraphToReactFlow(filteredGraphData);
   }, [filteredGraphData]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  // Sync transformed data into React Flow state whenever filters or data change
-  useEffect(() => {
-    setNodes(transformed.nodes);
-    setEdges(transformed.edges);
-  }, [transformed, setNodes, setEdges]);
+  const [nodes, setNodes, onNodesChange] = useNodesState(transformed.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(transformed.edges);
+
+
 
   const selectedNode = useMemo(() => {
     if (!conceptId || !rawGraphData) return null;
@@ -497,8 +494,8 @@ function KnowledgeGraphInner() {
 
         {/* React Flow */}
         <ReactFlow
-          nodes={nodes}
-          edges={edges}
+          nodes={transformed.nodes}
+          edges={transformed.edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onNodeClick={onNodeClick}
@@ -514,6 +511,7 @@ function KnowledgeGraphInner() {
           <Controls showInteractive={false} className="!rounded-lg !border !shadow-md" />
           <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
         </ReactFlow>
+        
 
         {/* Concept detail side panel */}
         {selectedNode && selectedNode.type === 'concept' && (
