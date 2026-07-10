@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   ReactFlow,
@@ -255,7 +255,7 @@ function ConceptNode({ data, id }: { data: ConceptNodeData; id: string }) {
 // Node type registry
 // ---------------------------------------------------------------------------
 
-const nodeTypes: Record<string, React.ComponentType<{ data: unknown; id: string }>> = {
+const nodeTypes = {
   userNode: UserNode,
   workspaceNode: WorkspaceNode,
   conceptNode: ConceptNode,
@@ -306,11 +306,11 @@ function KnowledgeGraphInner() {
     return transformSkillGraphToReactFlow(filteredGraphData);
   }, [filteredGraphData]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(transformed.nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(transformed.edges);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  // Sync transformed data into React Flow state when filters change
-  useMemo(() => {
+  // Sync transformed data into React Flow state whenever filters or data change
+  useEffect(() => {
     setNodes(transformed.nodes);
     setEdges(transformed.edges);
   }, [transformed, setNodes, setEdges]);
