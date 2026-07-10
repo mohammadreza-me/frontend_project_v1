@@ -306,11 +306,14 @@ function KnowledgeGraphInner() {
     return transformSkillGraphToReactFlow(filteredGraphData);
   }, [filteredGraphData]);
 
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(transformed.nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(transformed.edges);
-
-
+  // Sync transformed data into React Flow state whenever filters or data change
+  useEffect(() => {
+    setNodes(transformed.nodes);
+    setEdges(transformed.edges);
+  }, [transformed, setNodes, setEdges]);
 
   const selectedNode = useMemo(() => {
     if (!conceptId || !rawGraphData) return null;
@@ -318,7 +321,7 @@ function KnowledgeGraphInner() {
   }, [conceptId, rawGraphData]);
 
   const conceptCount = useMemo(
-    () => filteredGraphData?.nodes.filter((n) => n.typظe === 'concept').length ?? 0,
+    () => filteredGraphData?.nodes.filter((n) => n.type === 'concept').length ?? 0,
     [filteredGraphData],
   );
   const workspaceCount = useMemo(
@@ -494,8 +497,8 @@ function KnowledgeGraphInner() {
 
         {/* React Flow */}
         <ReactFlow
-          nodes={transformed.nodes}
-          edges={transformed.edges}
+          nodes={nodes}
+          edges={edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onNodeClick={onNodeClick}
@@ -511,7 +514,6 @@ function KnowledgeGraphInner() {
           <Controls showInteractive={false} className="!rounded-lg !border !shadow-md" />
           <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
         </ReactFlow>
-        
 
         {/* Concept detail side panel */}
         {selectedNode && selectedNode.type === 'concept' && (
@@ -651,10 +653,8 @@ function UserSummaryPopover({
 
 export function KnowledgeGraphPage() {
   return (
-    <div style={{ width: '100%', height: '100vh' }}>
-      <ReactFlowProvider>
-        <KnowledgeGraphInner />
-      </ReactFlowProvider>
-    </div>
+    <ReactFlowProvider>
+      <KnowledgeGraphInner />
+    </ReactFlowProvider>
   );
 }
