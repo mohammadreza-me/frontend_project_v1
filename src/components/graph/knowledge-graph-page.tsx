@@ -651,8 +651,10 @@ function UserSummaryPopover({
 
 export function KnowledgeGraphPage() {
   return (
-    <ReactFlowProvider>
-      <KnowledgeGraphInner />
-    </ReactFlowProvider>
+    <div style={{ width: '100%', height: '100vh' }}>
+      <ReactFlowProvider>
+        <KnowledgeGraphInner />
+      </ReactFlowProvider>
+    </div>
   );
 }
